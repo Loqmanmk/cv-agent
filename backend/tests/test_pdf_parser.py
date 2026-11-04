@@ -54,3 +54,15 @@ def test_pdf_without_text_layer_gives_empty_text() -> None:
     result = PdfParser().parse(make_pdf(with_text=False))
 
     assert result.text == ""
+
+
+def test_same_image_on_two_pages_is_extracted_once() -> None:
+    document = pymupdf.open()
+    first_page = document.new_page()
+    xref = first_page.insert_image(pymupdf.Rect(72, 72, 132, 152), stream=make_png(30, 40))
+    second_page = document.new_page()
+    second_page.insert_image(pymupdf.Rect(72, 72, 132, 152), xref=xref)
+
+    result = PdfParser().parse(bytes(document.tobytes()))
+
+    assert len(result.images) == 1
