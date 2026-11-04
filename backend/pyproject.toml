@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.162.0",
     "pillow>=13.0.0",
     "pydantic-settings>=2.16.2",
+    "pymupdf>=2.1",
     "python-docx>=1.2.0",
     "uvicorn[standard]>=0.54.0",
 ]
@@ -52,3 +53,7 @@ strict = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=app --cov-report=term-missing"
+
+[[tool.mypy.overrides]]
+module = "pymupdf.*"
+follow_imports = "skip"
