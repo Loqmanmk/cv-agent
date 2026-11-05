@@ -7,7 +7,7 @@ URL = re.compile(r"(?:https?://|www\.)\S+|(?:linkedin\.com|github\.com)/\S+")
 PHONE = re.compile(r"\+?\d[\d \t().-]{7,}\d")
 MIN_PHONE_DIGITS = 9
 MAX_PHONE_DIGITS = 15
-TRAILING_PUNCTUATION = ".,;:)"
+TRAILING_PUNCTUATION = ".,;:)\"'"
 
 
 @dataclass(frozen=True)

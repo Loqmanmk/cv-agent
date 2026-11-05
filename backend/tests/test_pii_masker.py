@@ -47,3 +47,11 @@ def test_restore_gives_back_the_original_text() -> None:
     masked = masker.mask(original)
 
     assert masker.restore(masked.text, masked.mapping) == original
+
+
+def test_quotes_around_a_value_stay_outside_the_placeholder() -> None:
+    text = '"email": "jane@example.com",\n"github": "github.com/janedoe"'
+
+    result = PiiMasker().mask(text)
+
+    assert result.text == '"email": "[[EMAIL_1]]",\n"github": "[[URL_1]]"'
