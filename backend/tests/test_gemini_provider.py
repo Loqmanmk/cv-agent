@@ -1,7 +1,9 @@
+import json
 from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any, NoReturn
 
+import httpx
 import pytest
 from google import genai
 from google.genai import errors
@@ -9,9 +11,10 @@ from pydantic import SecretStr
 
 from app.domain.cv import Language
 from app.domain.llm import LLMError
-from app.infrastructure.gemini_provider import GeminiProvider
+from app.infrastructure.gemini_provider import MAX_ATTEMPTS, GeminiProvider
 
 API_KEY = "test-key"
+VALID_ANSWER = '{"name": "French", "level": "Native"}'
 
 
 def make_provider(
@@ -20,7 +23,7 @@ def make_provider(
 ) -> GeminiProvider:
     client = genai.Client(api_key=API_KEY)
     monkeypatch.setattr(client.models, "generate_content", behavior)
-    return GeminiProvider(SecretStr(API_KEY), "test-model", client)
+    return GeminiProvider(SecretStr(API_KEY), "test-model", client, sleep=lambda _: None)
 
 
 def answering(text: str | None, calls: list[dict[str, Any]] | None = None) -> Callable[..., Any]:
@@ -32,39 +35,54 @@ def answering(text: str | None, calls: list[dict[str, Any]] | None = None) -> Ca
     return generate_content
 
 
-def failing(**_kwargs: Any) -> NoReturn:
-    raise errors.APIError(429, {"error": {"message": "quota exceeded"}})
+def failing_first(
+    failures: int,
+    code: int,
+    state: dict[str, int],
+) -> Callable[..., Any]:
+    def generate_content(**_kwargs: Any) -> SimpleNamespace:
+        state["calls"] += 1
+        if state["calls"] <= failures:
+            raise errors.APIError(code, {"error": {"message": "failure"}})
+        return SimpleNamespace(text=VALID_ANSWER)
+
+    return generate_content
+
+
+def unreachable(**_kwargs: Any) -> NoReturn:
+    raise httpx.ConnectError("getaddrinfo failed")
 
 
 def test_returns_the_validated_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = make_provider(monkeypatch, answering('{"name": "French", "level": "Native"}'))
+    provider = make_provider(monkeypatch, answering(VALID_ANSWER))
 
-    result = provider.generate("system", "user", Language)
-
-    assert result == Language(name="French", level="Native")
+    assert provider.generate("system", "user", Language) == Language(name="French", level="Native")
 
 
 def test_sends_model_prompts_and_schema(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, Any]] = []
-    provider = make_provider(monkeypatch, answering('{"name": "A", "level": "B"}', calls))
+    provider = make_provider(monkeypatch, answering(VALID_ANSWER, calls))
 
     provider.generate("system text", "user text", Language)
 
+    config = calls[0]["config"]
     assert calls[0]["model"] == "test-model"
     assert calls[0]["contents"] == "user text"
-    assert calls[0]["config"].system_instruction == "system text"
-    assert calls[0]["config"].response_schema is Language
+    assert config.system_instruction == "system text"
+    assert "name" in config.response_json_schema["properties"]
+    assert "additionalProperties" not in json.dumps(config.response_json_schema)
 
 
-def test_empty_answer_raises_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = make_provider(monkeypatch, answering(None))
+def test_unknown_fields_are_still_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    answer = '{"name": "French", "level": "Native", "invented": "x"}'
+    provider = make_provider(monkeypatch, answering(answer))
 
     with pytest.raises(LLMError):
         provider.generate("system", "user", Language)
 
 
-def test_answer_with_wrong_structure_raises_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = make_provider(monkeypatch, answering('{"unexpected": 1}'))
+def test_empty_answer_raises_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = make_provider(monkeypatch, answering(None))
 
     with pytest.raises(LLMError):
         provider.generate("system", "user", Language)
@@ -77,13 +95,40 @@ def test_invalid_json_raises_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
         provider.generate("system", "user", Language)
 
 
-def test_api_error_becomes_llm_error_without_leaking_the_key(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    provider = make_provider(monkeypatch, failing)
+def test_retries_when_the_model_is_overloaded(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {"calls": 0}
+    provider = make_provider(monkeypatch, failing_first(2, 503, state))
+
+    result = provider.generate("system", "user", Language)
+
+    assert result.name == "French"
+    assert state["calls"] == 3
+
+
+def test_gives_up_after_the_maximum_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {"calls": 0}
+    provider = make_provider(monkeypatch, failing_first(100, 503, state))
 
     with pytest.raises(LLMError) as raised:
         provider.generate("system", "user", Language)
 
-    assert "429" in str(raised.value)
+    assert "503" in str(raised.value)
     assert API_KEY not in str(raised.value)
+    assert state["calls"] == MAX_ATTEMPTS
+
+
+def test_does_not_retry_a_bad_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {"calls": 0}
+    provider = make_provider(monkeypatch, failing_first(100, 400, state))
+
+    with pytest.raises(LLMError):
+        provider.generate("system", "user", Language)
+
+    assert state["calls"] == 1
+
+
+def test_network_error_becomes_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = make_provider(monkeypatch, unreachable)
+
+    with pytest.raises(LLMError):
+        provider.generate("system", "user", Language)
