@@ -10,7 +10,7 @@ from google.genai import errors
 from pydantic import SecretStr
 
 from app.domain.cv import Language
-from app.domain.llm import LLMError
+from app.domain.llm import LLMError, LLMUnavailableError
 from app.infrastructure.gemini_provider import MAX_ATTEMPTS, GeminiProvider
 
 API_KEY = "test-key"
@@ -131,4 +131,33 @@ def test_network_error_becomes_llm_error(monkeypatch: pytest.MonkeyPatch) -> Non
     provider = make_provider(monkeypatch, unreachable)
 
     with pytest.raises(LLMError):
+        provider.generate("system", "user", Language)
+
+
+def test_quota_error_is_not_retried_and_is_marked_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = {"calls": 0}
+    provider = make_provider(monkeypatch, failing_first(100, 429, state))
+
+    with pytest.raises(LLMUnavailableError):
+        provider.generate("system", "user", Language)
+
+    assert state["calls"] == 1
+
+
+def test_bad_request_is_not_marked_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {"calls": 0}
+    provider = make_provider(monkeypatch, failing_first(100, 400, state))
+
+    with pytest.raises(LLMError) as raised:
+        provider.generate("system", "user", Language)
+
+    assert not isinstance(raised.value, LLMUnavailableError)
+
+
+def test_network_error_is_marked_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = make_provider(monkeypatch, unreachable)
+
+    with pytest.raises(LLMUnavailableError):
         provider.generate("system", "user", Language)

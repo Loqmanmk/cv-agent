@@ -28,6 +28,11 @@ def _numbers(text: str) -> set[str]:
     return {number.rstrip(".,") for number in NUMBER.findall(text)}
 
 
+def _contains_term(text: str, term: str) -> bool:
+    pattern = rf"(?<!\w){re.escape(term.strip())}(?!\w)"
+    return re.search(pattern, text, re.IGNORECASE) is not None
+
+
 def _tailorable_text(cv: CV) -> list[str]:
     parts = [cv.header.headline, cv.header.target_line, cv.profile, *cv.interests]
     for experience in cv.experiences:
@@ -46,7 +51,7 @@ class TailoringGuard:
             *self._locked_violations(original, tailored),
             *self._experience_violations(original, tailored),
             *self._project_violations(original, tailored),
-            *self._skill_violations(tailored, corpus.lower()),
+            *self._skill_violations(tailored, corpus),
             *self._number_violations(tailored, corpus),
         ]
 
@@ -96,12 +101,12 @@ class TailoringGuard:
         return found
 
     @staticmethod
-    def _skill_violations(tailored: CV, lowered_corpus: str) -> list[str]:
+    def _skill_violations(tailored: CV, corpus: str) -> list[str]:
         return [
             f"skill '{item}' is not in the original CV"
             for group in tailored.skills
             for item in group.items
-            if item.lower() not in lowered_corpus
+            if not _contains_term(corpus, item)
         ]
 
     @staticmethod

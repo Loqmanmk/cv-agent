@@ -23,6 +23,8 @@ You MUST NOT:
 - Change names, contact details, project titles, employers, job titles, cities, dates,
   degrees, schools, certifications or language levels.
 - Add more bullets than an entry already has.
+- Put the offer's job title or company name in the headline. The headline describes the
+  candidate, never the position applied for.
 - Translate. Keep the original language of the CV.
 
 If the offer asks for something the CV does not contain, simply do not mention it.
@@ -44,10 +46,23 @@ class CVTailor:
         for _ in range(MAX_ATTEMPTS):
             prompt = self._build_prompt(cv, offer, problems)
             tailored = self._llm.generate(SYSTEM_PROMPT, prompt, CV)
-            problems = self._guard.violations(cv, tailored)
+            problems = [
+                *self._guard.violations(cv, tailored),
+                *self._offer_echo(tailored, offer),
+            ]
             if not problems:
                 return tailored
         raise TailoringViolationError(problems)
+
+    @staticmethod
+    def _offer_echo(tailored: CV, offer: JobOffer) -> list[str]:
+        headline = tailored.header.headline.lower()
+        terms = [term for term in (offer.title, offer.company) if term]
+        return [
+            f"the headline must describe the candidate, not the offer ('{term}')"
+            for term in terms
+            if term.lower() in headline
+        ]
 
     @staticmethod
     def _build_prompt(cv: CV, offer: JobOffer, problems: list[str]) -> str:

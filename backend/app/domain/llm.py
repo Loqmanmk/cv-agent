@@ -7,6 +7,10 @@ class LLMError(Exception):
     """Raised when an AI provider fails or returns unusable output."""
 
 
+class LLMUnavailableError(LLMError):
+    """Raised when a provider is out of quota, overloaded or unreachable."""
+
+
 class LLMProvider(ABC):
     """Contract for any AI provider able to return structured data."""
 

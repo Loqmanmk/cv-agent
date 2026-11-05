@@ -29,3 +29,12 @@ def test_key_is_hidden_when_printed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
 
     assert "test-key" not in repr(IsolatedSettings())
+
+
+def test_model_chain_has_the_main_model_first_without_duplicates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GEMINI_MODEL", "model-a")
+    monkeypatch.setenv("GEMINI_FALLBACK_MODELS", "model-b, model-a ,model-c")
+
+    assert IsolatedSettings().gemini_model_chain == ["model-a", "model-b", "model-c"]

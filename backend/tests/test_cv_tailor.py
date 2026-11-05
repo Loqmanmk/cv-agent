@@ -88,3 +88,14 @@ def test_contact_details_are_hidden_from_the_ai_and_restored() -> None:
     assert "+00 000 000 000" not in prompt_seen_by_ai
     assert result.header.email == "jane@example.com"
     assert result.header.phone == "+00 000 000 000"
+
+
+def test_headline_must_not_echo_the_offer_title() -> None:
+    header = make_cv().header.model_copy(update={"headline": "Python Developer"})
+    echoing = make_cv().model_copy(update={"header": header})
+    provider = SequenceLLMProvider([echoing, make_cv()])
+
+    result = CVTailor(provider).tailor(make_cv(), make_offer())
+
+    assert result == make_cv()
+    assert "must describe the candidate" in provider.calls[1][1]

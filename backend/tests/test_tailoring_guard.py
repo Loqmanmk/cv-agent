@@ -173,3 +173,19 @@ def test_ensure_faithful_raises_with_the_violations() -> None:
 
 def test_ensure_faithful_accepts_a_faithful_cv() -> None:
     TailoringGuard().ensure_faithful(make_cv(), make_cv())
+
+
+def test_skill_must_match_as_a_whole_word() -> None:
+    original = make_cv().model_copy(update={"profile": "Web developer with JavaScript."})
+    tailored = original.model_copy(update={"skills": [SkillGroup(category="X", items=["Java"])]})
+
+    found = TailoringGuard().violations(original, tailored)
+
+    assert found == ["skill 'Java' is not in the original CV"]
+
+
+def test_skills_with_symbols_are_matched() -> None:
+    skills = [SkillGroup(category="Tools", items=["CI/CD", "C++"])]
+    original = make_cv().model_copy(update={"skills": skills})
+
+    assert TailoringGuard().violations(original, original) == []
