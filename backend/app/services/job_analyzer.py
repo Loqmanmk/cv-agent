@@ -2,15 +2,20 @@ from app.domain.job import JobOffer
 from app.domain.llm import LLMProvider
 
 MAX_CHARS = 20_000
+MAX_SKILL_WORDS = 4
 
 SYSTEM_PROMPT = """You extract structured data from a job offer.
 
 Rules:
 - Extract ONLY information that is explicitly written in the job offer.
 - Never invent a company, address, contact, skill or requirement. Leave a field empty if absent.
-- Copy skills and keywords exactly as written in the offer, in the offer's own language.
-- required_skills: skills and tools the offer demands. nice_to_have_skills: those marked
-  as a plus or desirable.
+- required_skills and nice_to_have_skills contain ONLY short technical terms: a tool, language,
+  framework, method or domain (for example "Python", "Docker", "CI/CD", "machine learning").
+  Each item is at most 4 words, copied exactly as written in the offer. Never write a sentence.
+  If one sentence lists several technologies, output one item per technology.
+- Do NOT put soft skills (autonomy, rigor), language levels or degrees in the skill lists.
+- required_skills: technical terms the offer demands. nice_to_have_skills: those marked as a plus
+  or desirable.
 - keywords: important technical terms and domain words an applicant tracking system would scan.
 - missions: the main tasks of the job, short and in the offer's language.
 - language: the language the offer is written in (fr, en, de, ar, or other).
@@ -25,7 +30,11 @@ class JobAnalysisError(Exception):
 
 def _keep_grounded(items: list[str], text: str) -> list[str]:
     lowered = text.lower()
-    return [item for item in items if item.strip() and item.lower() in lowered]
+    return [
+        item
+        for item in items
+        if item.strip() and len(item.split()) <= MAX_SKILL_WORDS and item.lower() in lowered
+    ]
 
 
 class JobAnalyzer:

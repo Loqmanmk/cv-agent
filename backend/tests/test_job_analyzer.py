@@ -82,3 +82,12 @@ def test_keeps_missions_unchanged() -> None:
     result = JobAnalyzer(FakeLLMProvider(offer)).analyze(OFFER_TEXT)
 
     assert result.missions == ["Build and maintain REST APIs"]
+
+
+def test_drops_sentences_that_are_not_short_skills() -> None:
+    sentence = "Maîtrise de Python, son écosystème et des bonnes pratiques"
+    offer = make_offer(required=[sentence, "Python"])
+
+    result = JobAnalyzer(FakeLLMProvider(offer)).analyze(f"{sentence}. Python requis.")
+
+    assert result.required_skills == ["Python"]
