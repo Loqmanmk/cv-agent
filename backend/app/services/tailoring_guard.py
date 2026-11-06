@@ -14,17 +14,17 @@ class TailoringViolationError(Exception):
         self.violations = violations
 
 
-def _strings(value: object) -> list[str]:
+def strings_in(value: object) -> list[str]:
     if isinstance(value, str):
         return [value]
     if isinstance(value, list):
-        return [text for item in value for text in _strings(item)]
+        return [text for item in value for text in strings_in(item)]
     if isinstance(value, dict):
-        return [text for item in value.values() for text in _strings(item)]
+        return [text for item in value.values() for text in strings_in(item)]
     return []
 
 
-def _numbers(text: str) -> set[str]:
+def numbers_in(text: str) -> set[str]:
     return {number.rstrip(".,") for number in NUMBER.findall(text)}
 
 
@@ -46,7 +46,7 @@ class TailoringGuard:
     """Checks that a tailored CV only rewords and reorders the original facts."""
 
     def violations(self, original: CV, tailored: CV) -> list[str]:
-        corpus = " ".join(_strings(original.model_dump()))
+        corpus = " ".join(strings_in(original.model_dump()))
         return [
             *self._locked_violations(original, tailored),
             *self._experience_violations(original, tailored),
@@ -111,6 +111,6 @@ class TailoringGuard:
 
     @staticmethod
     def _number_violations(tailored: CV, corpus: str) -> list[str]:
-        known = _numbers(corpus)
-        used = _numbers(" ".join(_tailorable_text(tailored)))
+        known = numbers_in(corpus)
+        used = numbers_in(" ".join(_tailorable_text(tailored)))
         return [f"number '{number}' is not in the original CV" for number in sorted(used - known)]

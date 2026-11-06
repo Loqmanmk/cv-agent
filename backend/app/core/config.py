@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -12,6 +13,9 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-3.6-flash"
     gemini_fallback_models: str = "gemini-3.5-flash,gemini-3.1-flash-lite"
+    applicant_address: str = ""
+    applicant_city: str = ""
+    applicant_gender: Literal["m", "f"] = "m"
 
     @property
     def gemini_model_chain(self) -> list[str]:

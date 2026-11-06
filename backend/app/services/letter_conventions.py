@@ -19,6 +19,7 @@ class LetterConventions:
     months: tuple[str, ...]
     closing: dict[Gender, str]
     first_day: str = ""
+    overclaims: tuple[str, ...] = ()
 
 
 def _french_closing(adjective: str) -> str:
@@ -52,6 +53,7 @@ FRENCH = LetterConventions(
     ),
     closing={"m": _french_closing("heureux"), "f": _french_closing("heureuse")},
     first_day="1er",
+    overclaims=("expertise", "expert", "experte", "maîtrise parfaite"),
 )
 
 _BY_LANGUAGE: dict[str, LetterConventions] = {"fr": FRENCH}
