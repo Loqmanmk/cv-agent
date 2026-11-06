@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}" dir="{{ direction }}">
+<head>
+<meta charset="utf-8">
+<title>{{ letter.subject }}</title>
+<style>
+  @page { size: A4; margin: 20mm 22mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, "Liberation Sans", Helvetica, sans-serif;
+    font-size: {{ font_size }}pt;
+    line-height: 1.4;
+    color: #000;
+  }
+  .sender { margin-bottom: {{ '%.2f' | format(1.6 * spacing) }}em; }
+  .recipient { text-align: right; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
+  .place-date { text-align: right; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
+  .subject { font-weight: bold; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
+  .greeting { margin-bottom: {{ '%.2f' | format(1.0 * spacing) }}em; }
+  p { margin: 0 0 {{ '%.2f' | format(0.9 * spacing) }}em; text-align: justify; }
+  .signature { margin-top: {{ '%.2f' | format(1.2 * spacing) }}em; text-align: right; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="sender">
+  <div><strong>{{ letter.sender.name }}</strong></div>
+  {% if letter.sender.address %}<div>{{ letter.sender.address }}</div>{% endif %}
+  <div>{{ letter.sender.email }}</div>
+  <div>{{ letter.sender.phone }}</div>
+</div>
+
+<div class="recipient">
+  {% for line in [letter.recipient.contact, letter.recipient.company, letter.recipient.address] if line %}
+  <div class="recipient-line">{{ line }}</div>
+  {% endfor %}
+</div>
+
+<div class="place-date">{{ letter.place_date }}</div>
+<div class="subject">{{ letter.subject }}</div>
+<div class="greeting">{{ letter.greeting }}</div>
+{% for paragraph in letter.paragraphs %}<p>{{ paragraph }}</p>
+{% endfor %}
+<div class="signature">{{ letter.signature }}</div>
+</body>
+</html>
