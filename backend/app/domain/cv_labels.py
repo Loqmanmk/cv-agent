@@ -35,3 +35,5 @@ FRENCH_LABELS = CVLabels(
     email="Email",
     location="Localisation",
 )
+
+LABELS_BY_LANGUAGE: dict[str, CVLabels] = {"fr": FRENCH_LABELS}
