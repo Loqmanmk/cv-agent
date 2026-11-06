@@ -99,3 +99,35 @@ def test_headline_must_not_echo_the_offer_title() -> None:
 
     assert result == make_cv()
     assert "must describe the candidate" in provider.calls[1][1]
+
+
+def offer_with_keywords(keywords: list[str]) -> JobOffer:
+    return JobOffer(
+        title="Developer",
+        company="Acme",
+        language="en",
+        contract_type="full_time",
+        keywords=keywords,
+    )
+
+
+def test_dropping_a_more_relevant_project_is_rejected() -> None:
+    original = make_cv()
+    wrong = original.model_copy(update={"projects": [original.projects[0]]})
+    provider = SequenceLLMProvider([wrong, original])
+
+    result = CVTailor(provider).tailor(original, offer_with_keywords(["Spring Boot"]))
+
+    assert result == original
+    assert "fits the offer better" in provider.calls[1][1]
+
+
+def test_dropping_a_less_relevant_project_is_allowed() -> None:
+    original = make_cv()
+    right = original.model_copy(update={"projects": [original.projects[1]]})
+    provider = FakeLLMProvider(right)
+
+    result = CVTailor(provider).tailor(original, offer_with_keywords(["Spring Boot"]))
+
+    assert [project.title for project in result.projects] == ["Committed"]
+    assert len(provider.calls) == 1

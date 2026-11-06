@@ -1,7 +1,7 @@
-from app.domain.cv import CV
+from app.domain.cv import CV, Project
 from app.domain.job import JobOffer
 from app.domain.llm import LLMProvider
-from app.services.tailoring_guard import TailoringGuard, TailoringViolationError
+from app.services.tailoring_guard import TailoringGuard, TailoringViolationError, contains_term
 
 MAX_ATTEMPTS = 3
 
@@ -14,7 +14,8 @@ You MAY:
 - Rewrite bullets with strong action verbs and the offer's vocabulary, but only where the
   offer's term truthfully describes work already in the CV.
 - Put the most relevant bullets first and merge or shorten bullets to save space.
-- Keep only the projects most relevant to the offer. The others may be dropped.
+- Drop projects to save space, but keep the ones whose content best matches the offer's
+  technologies. The least relevant projects go first.
 - Regroup, rename and reorder skill categories, and put the offer's skills first.
 
 You MUST NOT:
@@ -34,6 +35,11 @@ If <problems_to_fix> is present, your previous answer broke these rules. Fix the
 """
 
 
+def _relevance(project: Project, terms: list[str]) -> int:
+    text = " ".join([project.title, project.subtitle, *project.bullets])
+    return sum(contains_term(text, term) for term in terms)
+
+
 class CVTailor:
     """Rewrites a CV for a job offer, and rejects anything that breaks the faithfulness rules."""
 
@@ -49,6 +55,7 @@ class CVTailor:
             problems = [
                 *self._guard.violations(cv, tailored),
                 *self._offer_echo(tailored, offer),
+                *self._dropped_relevant_projects(cv, tailored, offer),
             ]
             if not problems:
                 return tailored
@@ -62,6 +69,21 @@ class CVTailor:
             f"the headline must describe the candidate, not the offer ('{term}')"
             for term in terms
             if term.lower() in headline
+        ]
+
+    @staticmethod
+    def _dropped_relevant_projects(cv: CV, tailored: CV, offer: JobOffer) -> list[str]:
+        terms = list(
+            dict.fromkeys([*offer.required_skills, *offer.nice_to_have_skills, *offer.keywords])
+        )
+        kept_titles = {project.title for project in tailored.projects}
+        kept = [project for project in cv.projects if project.title in kept_titles]
+        dropped = [project for project in cv.projects if project.title not in kept_titles]
+        weakest_kept = min((_relevance(project, terms) for project in kept), default=0)
+        return [
+            f"project '{project.title}' fits the offer better than a project you kept"
+            for project in dropped
+            if _relevance(project, terms) > weakest_kept
         ]
 
     @staticmethod

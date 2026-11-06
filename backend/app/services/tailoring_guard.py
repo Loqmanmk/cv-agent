@@ -28,7 +28,7 @@ def _numbers(text: str) -> set[str]:
     return {number.rstrip(".,") for number in NUMBER.findall(text)}
 
 
-def _contains_term(text: str, term: str) -> bool:
+def contains_term(text: str, term: str) -> bool:
     pattern = rf"(?<!\w){re.escape(term.strip())}(?!\w)"
     return re.search(pattern, text, re.IGNORECASE) is not None
 
@@ -106,7 +106,7 @@ class TailoringGuard:
             f"skill '{item}' is not in the original CV"
             for group in tailored.skills
             for item in group.items
-            if not _contains_term(corpus, item)
+            if not contains_term(corpus, item)
         ]
 
     @staticmethod
