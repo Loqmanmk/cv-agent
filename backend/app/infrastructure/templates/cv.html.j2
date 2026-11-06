@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="{{ labels.lang }}" dir="{{ labels.direction }}">
+<head>
+<meta charset="utf-8">
+<title>{{ cv.header.name }}</title>
+<style>
+  @page { size: A4; margin: 10mm 12mm; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Arial, "Liberation Sans", Helvetica, sans-serif;
+    font-size: {{ font_size }}pt;
+    line-height: 1.25;
+    color: #000;
+  }
+  header { display: flex; justify-content: space-between; align-items: flex-start; gap: 4mm; }
+  h1 { font-size: 2.1em; line-height: 1.1; margin: 0 0 0.2em; }
+  .photo { width: 27mm; height: 32mm; object-fit: cover; flex: none; }
+  h2 {
+    font-size: 1.05em;
+    text-transform: uppercase;
+    margin: {{ '%.2f' | format(0.6 * spacing) }}em 0 {{ '%.2f' | format(0.3 * spacing) }}em;
+    padding-bottom: 0.1em;
+    border-bottom: 1px solid #000;
+  }
+  .row { display: flex; justify-content: space-between; gap: 3mm; }
+  .right { white-space: nowrap; font-weight: bold; }
+  .entry { margin-bottom: {{ '%.2f' | format(0.25 * spacing) }}em; }
+  ul { margin: 0.1em 0 0; padding-left: 1.2em; }
+  li, p { margin: 0; }
+</style>
+</head>
+<body>
+{% macro period(start, end) -%}{{ start }}{% if end %} – {{ end }}{% endif %}{%- endmacro %}
+<header>
+  <div>
+    <h1>{{ cv.header.name }}</h1>
+    <div>{{ cv.header.headline }}</div>
+    {% if cv.header.target_line %}<div>{{ cv.header.target_line }}</div>{% endif %}
+    <div><strong>{{ labels.phone }} :</strong> {{ cv.header.phone }} &nbsp;|&nbsp; <strong>{{ labels.email }} :</strong> {{ cv.header.email }}</div>
+    {% if cv.header.linkedin or cv.header.github %}
+    <div>
+      {% if cv.header.linkedin %}<strong>LinkedIn :</strong> {{ cv.header.linkedin }}{% endif %}
+      {% if cv.header.linkedin and cv.header.github %}&nbsp;|&nbsp;{% endif %}
+      {% if cv.header.github %}<strong>GitHub :</strong> {{ cv.header.github }}{% endif %}
+    </div>
+    {% endif %}
+    {% if cv.header.location %}<div><strong>{{ labels.location }} :</strong> {{ cv.header.location }}</div>{% endif %}
+  </div>
+  {% if photo_uri %}<img class="photo" src="{{ photo_uri }}" alt="">{% endif %}
+</header>
+
+{% if cv.profile %}
+<h2>{{ labels.profile }}</h2>
+<p>{{ cv.profile }}</p>
+{% endif %}
+
+{% if cv.experiences %}
+<h2>{{ labels.experiences }}</h2>
+{% for e in cv.experiences %}
+<div class="entry">
+  <div class="row"><strong>{{ e.title }}</strong><span class="right">{{ period(e.start, e.end) }}</span></div>
+  <div>{{ [e.company, e.city] | select | join(", ") }}</div>
+  <ul>{% for b in e.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if cv.projects %}
+<h2>{{ labels.projects }}</h2>
+{% for p in cv.projects %}
+<div class="entry">
+  <div><strong>{{ p.title }}</strong>{% if p.subtitle %} {{ p.subtitle }}{% endif %}</div>
+  <ul>{% for b in p.bullets %}<li>{{ b }}</li>{% endfor %}</ul>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if cv.education %}
+<h2>{{ labels.education }}</h2>
+{% for e in cv.education %}
+<div class="entry">
+  <div class="row"><strong>{{ e.degree }}</strong><span class="right">{{ period(e.start, e.end) }}</span></div>
+  <div>{{ [e.school, e.city] | select | join(", ") }}{% if e.note %} – {{ e.note }}{% endif %}</div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if cv.skills %}
+<h2>{{ labels.skills }}</h2>
+{% for g in cv.skills %}
+<div><strong>{{ g.category }} :</strong> {{ g.items | join(", ") }}</div>
+{% endfor %}
+{% endif %}
+
+{% if cv.certifications %}
+<h2>{{ labels.certifications }}</h2>
+{% for c in cv.certifications %}
+<div class="row"><span>{{ [c.name, c.issuer] | select | join(" - ") }}</span><span class="right">{{ c.status }}</span></div>
+{% endfor %}
+{% endif %}
+
+{% if cv.languages %}
+<h2>{{ labels.languages }}</h2>
+<div>{% for l in cv.languages %}{{ l.name }} : {{ l.level }}{% if not loop.last %} &nbsp;|&nbsp; {% endif %}{% endfor %}</div>
+{% endif %}
+
+{% if cv.interests %}
+<h2>{{ labels.interests }}</h2>
+{% for i in cv.interests %}<div>{{ i }}</div>{% endfor %}
+{% endif %}
+</body>
+</html>
