@@ -82,3 +82,14 @@ def test_prompt_asks_for_duration_attribution_and_honest_verbs() -> None:
     assert "target_line" in system_prompt
     assert "exact place" in system_prompt
     assert "discover" in system_prompt
+
+
+def test_company_summary_reaches_the_prompt() -> None:
+    offer = make_offer().model_copy(update={"company_summary": "Acme insures trade credit."})
+    provider = FakeLLMProvider(make_body())
+
+    LetterWriter(provider).write(make_cv(), offer, "m")
+
+    system_prompt, user_prompt = provider.calls[0]
+    assert "company_summary" in system_prompt
+    assert "Acme insures trade credit." in user_prompt

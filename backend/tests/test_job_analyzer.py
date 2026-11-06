@@ -1,7 +1,7 @@
 import pytest
 
 from app.domain.job import JobOffer
-from app.services.job_analyzer import MAX_CHARS, JobAnalysisError, JobAnalyzer
+from app.services.job_analyzer import MAX_CHARS, SYSTEM_PROMPT, JobAnalysisError, JobAnalyzer
 from tests.fakes import FakeLLMProvider
 
 OFFER_TEXT = "Acme seeks a Python developer. Experience with FastAPI and Docker. Kubernetes a plus."
@@ -91,3 +91,30 @@ def test_drops_sentences_that_are_not_short_skills() -> None:
     result = JobAnalyzer(FakeLLMProvider(offer)).analyze(f"{sentence}. Python requis.")
 
     assert result.required_skills == ["Python"]
+
+
+COMPANY_TEXT = "Acme works in credit insurance in 58 countries. We seek a Python developer."
+
+
+def analyzed_summary(summary: str) -> str:
+    offer = make_offer().model_copy(update={"company_summary": summary})
+
+    return JobAnalyzer(FakeLLMProvider(offer)).analyze(COMPANY_TEXT).company_summary
+
+
+def test_keeps_a_company_summary_that_matches_the_offer() -> None:
+    summary = "Acme: credit insurance in 58 countries."
+
+    assert analyzed_summary(summary) == summary
+
+
+def test_drops_a_company_summary_with_an_invented_number() -> None:
+    assert analyzed_summary("Acme operates in 99 countries.") == ""
+
+
+def test_drops_a_company_summary_that_is_too_long() -> None:
+    assert analyzed_summary("word " * 200) == ""
+
+
+def test_prompt_asks_for_a_company_summary() -> None:
+    assert "company_summary" in SYSTEM_PROMPT

@@ -3,7 +3,7 @@ from app.domain.letter import LetterBody
 from app.services.letter_guard import LetterGuard
 from tests.test_tailoring_guard import make_cv
 
-FILLER = " ".join(["mot"] * 50)
+FILLER = " ".join(["Acme", *["mot"] * 49])
 
 
 def make_offer() -> JobOffer:
@@ -91,3 +91,17 @@ def test_overclaim_word_is_rejected() -> None:
 
 def test_overclaim_check_matches_whole_words_only() -> None:
     assert violations_of(make_body(experience="Mon expérience en Python")) == []
+
+
+def test_letter_must_name_the_company() -> None:
+    plain = " ".join(["mot"] * 50)
+    body = LetterBody(opening=plain, experience=plain, motivation=plain)
+
+    assert violations_of(body) == ["the letter never mentions the company name 'Acme'"]
+
+
+def test_company_summary_numbers_are_allowed_in_the_letter() -> None:
+    offer = make_offer().model_copy(update={"company_summary": "Active in 58 countries."})
+    body = make_body(motivation="Acme est présent dans 58 pays")
+
+    assert LetterGuard().violations(body, make_cv(), offer) == []

@@ -27,6 +27,7 @@ def main(path: str) -> None:
     print(f"title:         {offer.title}")
     print(f"company:       {offer.company}")
     print(f"location:      {offer.location}")
+    print(f"summary:       {offer.company_summary}")
     print(f"language:      {offer.language}")
     print(f"contract:      {offer.contract_type}")
     print(f"required:      {offer.required_skills}")

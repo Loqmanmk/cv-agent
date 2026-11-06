@@ -10,15 +10,18 @@ MAX_ATTEMPTS = 3
 SYSTEM_PROMPT = """You write the three body paragraphs of a cover letter, in {language}.
 
 The letter frame is fixed and added separately. Write only these paragraphs:
-- opening: say the candidate applies for the position and is motivated by the company's sector.
-  Match the contract type of the offer. For an internship, state the duration and the start
-  date exactly as written in the CV's target_line.
+- opening: say the candidate applies for the position and is drawn to what the company does
+  (see company_summary in the offer). Match the contract type of the offer. For an internship,
+  state the duration and the start date exactly as written in the CV's target_line.
 - experience: connect the candidate's real experience and training from the CV to the missions
   of the offer. Name two skills that the CV really shows.
-- motivation: explain why this company and this offer, using concrete details from the offer
-  (missions, technologies, sector). End with the candidate's ability to adapt.
+- motivation: explain why this company and this offer. Anchor it in concrete details from the
+  offer: the company's activity, scale or values (company_summary), the missions and the
+  technologies. End with the candidate's ability to adapt.
 
 Rules:
+- Name the company at least once. Use company facts only from company_summary or the offer,
+  and copy any number exactly. Never invent a fact about the company.
 - First person, professional and warm tone, 50 to 90 words per paragraph.
 - Use only facts from the CV. Never invent an experience, skill, tool, number or achievement.
 - Attribute every skill to the exact place the CV shows it: a named project, or a named

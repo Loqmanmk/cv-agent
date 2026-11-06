@@ -38,6 +38,7 @@ class LetterGuard:
             found.extend(self._paragraph_violations(name, text, allowed_numbers))
             found.extend(self._overclaim_violations(name, text, overclaims))
         found.extend(self._claim_violations(body.experience, cv_text, offer))
+        found.extend(self._company_violations(list(paragraphs.values()), offer.company))
         return found
 
     @staticmethod
@@ -71,3 +72,9 @@ class LetterGuard:
             for term in terms
             if contains_term(experience, term) and not contains_term(cv_text, term)
         ]
+
+    @staticmethod
+    def _company_violations(texts: list[str], company: str) -> list[str]:
+        if not company or any(contains_term(text, company) for text in texts):
+            return []
+        return [f"the letter never mentions the company name '{company}'"]

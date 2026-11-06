@@ -16,6 +16,7 @@ class JobOffer(DomainModel):
     reference: str = ""
     location: str = ""
     sector: str = ""
+    company_summary: str = ""
     language: OfferLanguage
     contract_type: ContractType
     required_skills: list[str] = Field(default_factory=list)
