@@ -67,3 +67,34 @@ def test_empty_sections_are_omitted() -> None:
 
 def test_font_size_is_a_parameter() -> None:
     assert "font-size: 8.5pt" in build(font_size=8.5)
+
+
+def cv_with_links(linkedin: str, github: str = "") -> CV:
+    cv = make_cv()
+    header = cv.header.model_copy(update={"linkedin": linkedin, "github": github})
+    return cv.model_copy(update={"header": header})
+
+
+def test_links_without_a_scheme_get_https() -> None:
+    html = build(cv_with_links("linkedin.com/in/jane", "github.com/jane"))
+
+    assert '<a href="https://linkedin.com/in/jane">linkedin.com/in/jane</a>' in html
+    assert '<a href="https://github.com/jane">github.com/jane</a>' in html
+
+
+def test_existing_scheme_is_kept() -> None:
+    html = build(cv_with_links("http://example.com/jane"))
+
+    assert 'href="http://example.com/jane"' in html
+
+
+def test_dangerous_links_are_shown_as_text_without_a_link() -> None:
+    html = build(cv_with_links("javascript:alert(1)"))
+
+    assert "javascript:alert(1)" in html
+    assert 'href="javascript' not in html
+    assert "<a " not in html
+
+
+def test_text_that_is_not_a_domain_is_not_linked() -> None:
+    assert "<a " not in build(cv_with_links("my linkedin profile"))

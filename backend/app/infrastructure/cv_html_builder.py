@@ -1,5 +1,6 @@
 import base64
 from pathlib import Path
+from urllib.parse import urlparse
 
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -20,6 +21,19 @@ class UnsupportedPhotoError(Exception):
     """Raised when the photo format cannot be embedded in the CV."""
 
 
+def safe_url(value: str) -> str:
+    """Return a clickable http(s) address, or an empty string if the value is not safe."""
+    text = value.strip()
+    if not text or any(character.isspace() for character in text):
+        return ""
+    candidate = text if "://" in text else f"https://{text}"
+    parsed = urlparse(candidate)
+    host = parsed.hostname or ""
+    if parsed.scheme not in {"http", "https"} or "." not in host:
+        return ""
+    return candidate
+
+
 class CVHtmlBuilder:
     """Fills the CV template. Every value is HTML-escaped."""
 
@@ -29,6 +43,7 @@ class CVHtmlBuilder:
             autoescape=True,
             undefined=StrictUndefined,
         )
+        self._environment.filters["safe_url"] = safe_url
 
     def build(
         self,

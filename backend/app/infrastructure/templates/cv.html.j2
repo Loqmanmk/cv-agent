@@ -28,9 +28,14 @@
   .entry { margin-bottom: {{ '%.2f' | format(0.25 * spacing) }}em; }
   ul { margin: 0.1em 0 0; padding-left: 1.2em; }
   li, p { margin: 0; }
+  a { color: #1a4f8b; text-decoration: underline; }
 </style>
 </head>
 <body>
+{% macro link(url) -%}
+{%- set href = url | safe_url -%}
+{%- if href %}<a href="{{ href }}">{{ url }}</a>{% else %}{{ url }}{% endif -%}
+{%- endmacro %}
 {% macro period(start, end) -%}{{ start }}{% if end %} – {{ end }}{% endif %}{%- endmacro %}
 <header>
   <div>
@@ -40,9 +45,9 @@
     <div><strong>{{ labels.phone }} :</strong> {{ cv.header.phone }} &nbsp;|&nbsp; <strong>{{ labels.email }} :</strong> {{ cv.header.email }}</div>
     {% if cv.header.linkedin or cv.header.github %}
     <div>
-      {% if cv.header.linkedin %}<strong>LinkedIn :</strong> {{ cv.header.linkedin }}{% endif %}
+      {% if cv.header.linkedin %}<strong>LinkedIn :</strong> {{ link(cv.header.linkedin) }}{% endif %}
       {% if cv.header.linkedin and cv.header.github %}&nbsp;|&nbsp;{% endif %}
-      {% if cv.header.github %}<strong>GitHub :</strong> {{ cv.header.github }}{% endif %}
+      {% if cv.header.github %}<strong>GitHub :</strong> {{ link(cv.header.github) }}{% endif %}
     </div>
     {% endif %}
     {% if cv.header.location %}<div><strong>{{ labels.location }} :</strong> {{ cv.header.location }}</div>{% endif %}
