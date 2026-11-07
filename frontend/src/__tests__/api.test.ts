@@ -1,6 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiError, createApplication, type ApplicationRequestValues } from "@/lib/api";
+import {
+  ApiError,
+  createApplication,
+  renderDocuments,
+  type ApplicationRequestValues,
+  type RenderRequestValues,
+} from "@/lib/api";
+
+import { makeCv, makeLetter, makeResultBody } from "./fixtures";
 
 const fetchMock = vi.fn();
 
@@ -10,14 +18,14 @@ const values: ApplicationRequestValues = {
   includePhoto: true,
 };
 
-const successBody = {
-  job_title: "Stagiaire DataLab",
-  company: "Coface",
+const renderValues: RenderRequestValues = {
+  cv: makeCv(),
+  letter: makeLetter(),
   language: "fr",
-  photo_used: true,
-  cv_pdf_base64: "Y3Y=",
-  letter_pdf_base64: "bGV0dGVy",
+  photoBase64: "abc",
 };
+
+const renderBody = { cv_pdf_base64: "Y3Y=", letter_pdf_base64: "bGV0dGVy" };
 
 function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return new Response(JSON.stringify(body), {
@@ -49,7 +57,7 @@ afterEach(() => {
 
 describe("createApplication", () => {
   it("posts the CV, the job offer and the photo choice as a form", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(successBody));
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
 
     await createApplication(values);
 
@@ -64,24 +72,37 @@ describe("createApplication", () => {
 
   it("ignores a trailing slash in the API address", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "http://api.test/");
-    fetchMock.mockResolvedValue(jsonResponse(successBody));
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
 
     await createApplication(values);
 
     expect((fetchMock.mock.calls[0] as [string])[0]).toBe("http://api.test/applications");
   });
 
-  it("returns the result with camelCase names", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(successBody));
+  it("returns the result with camelCase names and the editable data", async () => {
+    const body = makeResultBody();
+    fetchMock.mockResolvedValue(jsonResponse(body));
 
     expect(await createApplication(values)).toEqual({
       jobTitle: "Stagiaire DataLab",
       company: "Coface",
       language: "fr",
       photoUsed: true,
-      cvPdfBase64: "Y3Y=",
-      letterPdfBase64: "bGV0dGVy",
+      cvPdfBase64: body.cv_pdf_base64,
+      letterPdfBase64: body.letter_pdf_base64,
+      originalCv: body.original_cv,
+      cv: body.cv,
+      letter: body.letter,
+      photoBase64: body.photo_base64,
     });
+  });
+
+  it("accepts an answer without a photo", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(makeResultBody({ photo_used: false, photo_base64: null })),
+    );
+
+    expect((await createApplication(values)).photoBase64).toBeNull();
   });
 
   it("shows the message of a 422 answer", async () => {
@@ -153,10 +174,87 @@ describe("createApplication", () => {
     expect(error.message).toBe("The server sent an unexpected answer.");
   });
 
+  it("refuses an answer without the editable data", async () => {
+    const withoutCv: Record<string, unknown> = { ...makeResultBody() };
+    delete withoutCv.cv;
+    fetchMock.mockResolvedValue(jsonResponse(withoutCv));
+
+    const error = await failureOf(createApplication(values));
+
+    expect(error.message).toBe("The server sent an unexpected answer.");
+  });
+
   it("lets a cancelled request propagate as it is", async () => {
     const abort = new DOMException("aborted", "AbortError");
     fetchMock.mockRejectedValue(abort);
 
     await expect(createApplication(values)).rejects.toBe(abort);
+  });
+});
+
+describe("renderDocuments", () => {
+  it("posts the edited documents as JSON", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(renderBody));
+
+    await renderDocuments(renderValues);
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://api.test/render");
+    expect(init.method).toBe("POST");
+    expect(init.headers).toEqual({ "Content-Type": "application/json" });
+    expect(JSON.parse(init.body as string)).toEqual({
+      cv: makeCv(),
+      letter: makeLetter(),
+      language: "fr",
+      photo_base64: "abc",
+    });
+  });
+
+  it("sends null when there is no photo", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(renderBody));
+
+    await renderDocuments({ ...renderValues, photoBase64: null });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((JSON.parse(init.body as string) as { photo_base64: unknown }).photo_base64).toBeNull();
+  });
+
+  it("returns the new PDFs", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(renderBody));
+
+    expect(await renderDocuments(renderValues)).toEqual({
+      cvPdfBase64: "Y3Y=",
+      letterPdfBase64: "bGV0dGVy",
+    });
+  });
+
+  it("shows the message of a 422 answer", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "The documents are too long." }, 422));
+
+    const error = await failureOf(renderDocuments(renderValues));
+
+    expect(error.message).toBe("The documents are too long.");
+  });
+
+  it("tells how long to wait after a 429 answer", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ detail: "x" }, 429, { "Retry-After": "30" }));
+
+    const error = await failureOf(renderDocuments(renderValues));
+
+    expect(error.message).toBe("Too many requests. Please try again in about 1 minute.");
+  });
+
+  it("explains that the server cannot be reached", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+
+    expect((await failureOf(renderDocuments(renderValues))).message).toContain("Cannot reach");
+  });
+
+  it("refuses an answer with an unexpected shape", async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ cv_pdf_base64: "x" }));
+
+    const error = await failureOf(renderDocuments(renderValues));
+
+    expect(error.message).toBe("The server sent an unexpected answer.");
   });
 });

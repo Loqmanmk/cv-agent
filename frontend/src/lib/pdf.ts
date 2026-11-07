@@ -16,3 +16,8 @@ export function fileSlug(text: string): string {
     .replace(/^-+|-+$/g, "");
   return slug || "application";
 }
+
+export function imageDataUri(base64: string): string {
+  const mime = base64.startsWith("/9j/") ? "image/jpeg" : "image/png";
+  return `data:${mime};base64,${base64}`;
+}

@@ -4,16 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationPanel } from "@/components/ApplicationPanel";
 
+import { makeResultBody } from "./fixtures";
+
 const fetchMock = vi.fn();
 const revokeMock = vi.fn();
 
-const successBody = {
-  job_title: "Stagiaire DataLab",
-  company: "Coface",
-  language: "fr",
-  photo_used: true,
-  cv_pdf_base64: btoa("%PDF-cv"),
-  letter_pdf_base64: btoa("%PDF-letter"),
+const renderBody = {
+  cv_pdf_base64: btoa("%PDF-cv2"),
+  letter_pdf_base64: btoa("%PDF-letter2"),
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -29,6 +27,13 @@ async function fillAndSubmit(user: UserEvent) {
   await user.click(screen.getByRole("button", { name: "Create my application" }));
 }
 
+async function editProfileAndRegenerate(user: UserEvent) {
+  const profile = await screen.findByLabelText("Profile");
+  await user.clear(profile);
+  await user.type(profile, "My own profile.");
+  await user.click(screen.getByRole("button", { name: "Regenerate PDFs" }));
+}
+
 function setup() {
   const user = userEvent.setup({ applyAccept: false });
   const view = render(<ApplicationPanel />);
@@ -42,7 +47,12 @@ beforeEach(() => {
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     writable: true,
-    value: vi.fn().mockReturnValueOnce("blob:cv").mockReturnValueOnce("blob:letter"),
+    value: vi
+      .fn()
+      .mockReturnValueOnce("blob:cv")
+      .mockReturnValueOnce("blob:letter")
+      .mockReturnValueOnce("blob:cv2")
+      .mockReturnValueOnce("blob:letter2"),
   });
   Object.defineProperty(URL, "revokeObjectURL", {
     configurable: true,
@@ -67,7 +77,7 @@ describe("ApplicationPanel", () => {
   });
 
   it("shows the result with a download link for each PDF", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(successBody));
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
     const { user } = setup();
 
     await fillAndSubmit(user);
@@ -81,8 +91,19 @@ describe("ApplicationPanel", () => {
     expect(letterLink).toHaveAttribute("download", "lettre-coface.pdf");
   });
 
+  it("shows the review screen with the tailored text", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    const { user } = setup();
+
+    await fillAndSubmit(user);
+
+    expect(await screen.findByLabelText("Profile")).toHaveValue("Tailored profile.");
+    expect(screen.getByRole("button", { name: "Regenerate PDFs" })).toBeEnabled();
+  });
+
   it("warns when a photo was requested but not found", async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ ...successBody, photo_used: false }));
+    const body = makeResultBody({ photo_used: false, photo_base64: null });
+    fetchMock.mockResolvedValue(jsonResponse(body));
     const { user } = setup();
 
     await fillAndSubmit(user);
@@ -109,20 +130,97 @@ describe("ApplicationPanel", () => {
     expect(await screen.findByText("skill 'Kubernetes' is not in the CV")).toBeInTheDocument();
   });
 
+  it("regenerates the PDFs from the edited text", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(renderBody));
+    const { user } = setup();
+    await fillAndSubmit(user);
+
+    await editProfileAndRegenerate(user);
+
+    expect(await screen.findByText("Documents updated from your edits.")).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
+    const sent = JSON.parse(init.body as string) as {
+      cv: { profile: string };
+      language: string;
+      photo_base64: string | null;
+    };
+    expect(url).toContain("/render");
+    expect(sent.cv.profile).toBe("My own profile.");
+    expect(sent.language).toBe("fr");
+    expect(sent.photo_base64).toBe("iVBORw0KGgo=");
+    expect(screen.getByRole("link", { name: "Download CV (PDF)" })).toHaveAttribute(
+      "href",
+      "blob:cv2",
+    );
+    expect(screen.getByRole("link", { name: "Download cover letter (PDF)" })).toHaveAttribute(
+      "href",
+      "blob:letter2",
+    );
+  });
+
+  it("releases the old files only when the new ones replace them", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(renderBody));
+    const { user } = setup();
+    await fillAndSubmit(user);
+    await screen.findByRole("link", { name: "Download CV (PDF)" });
+    expect(revokeMock).not.toHaveBeenCalled();
+
+    await editProfileAndRegenerate(user);
+    await screen.findByText("Documents updated from your edits.");
+
+    expect(revokeMock).toHaveBeenCalledWith("blob:cv");
+    expect(revokeMock).toHaveBeenCalledWith("blob:letter");
+    expect(revokeMock).not.toHaveBeenCalledWith("blob:cv2");
+  });
+
+  it("keeps the previous files and shows the error when regenerating fails", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse({ detail: "The documents are too long." }, 422));
+    const { user } = setup();
+    await fillAndSubmit(user);
+
+    await editProfileAndRegenerate(user);
+
+    expect(await screen.findByText("The documents are too long.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download CV (PDF)" })).toHaveAttribute(
+      "href",
+      "blob:cv",
+    );
+    expect(revokeMock).not.toHaveBeenCalled();
+  });
+
+  it("locks the review button while regenerating", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockReturnValueOnce(new Promise(() => {}));
+    const { user } = setup();
+    await fillAndSubmit(user);
+
+    await editProfileAndRegenerate(user);
+
+    expect(await screen.findByRole("button", { name: "Regenerating…" })).toBeDisabled();
+  });
+
   it("goes back to the form and releases the files on start again", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(successBody));
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
     const { user } = setup();
     await fillAndSubmit(user);
 
     await user.click(await screen.findByRole("button", { name: "Start again" }));
 
     expect(screen.queryByRole("link", { name: "Download CV (PDF)" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Profile")).not.toBeInTheDocument();
     expect(revokeMock).toHaveBeenCalledWith("blob:cv");
     expect(revokeMock).toHaveBeenCalledWith("blob:letter");
   });
 
   it("releases the files when the page is left", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(successBody));
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
     const { user, unmount } = setup();
     await fillAndSubmit(user);
     await screen.findByRole("link", { name: "Download CV (PDF)" });

@@ -1,3 +1,5 @@
+import type { CoverLetter, Cv } from "@/lib/types";
+
 export type ApplicationRequestValues = {
   cvFile: File;
   jobText: string;
@@ -9,6 +11,22 @@ export type ApplicationResult = {
   company: string;
   language: string;
   photoUsed: boolean;
+  cvPdfBase64: string;
+  letterPdfBase64: string;
+  originalCv: Cv;
+  cv: Cv;
+  letter: CoverLetter;
+  photoBase64: string | null;
+};
+
+export type RenderRequestValues = {
+  cv: Cv;
+  letter: CoverLetter;
+  language: string;
+  photoBase64: string | null;
+};
+
+export type RenderedDocuments = {
   cvPdfBase64: string;
   letterPdfBase64: string;
 };
@@ -35,6 +53,15 @@ type ResultBody = {
   photo_used: boolean;
   cv_pdf_base64: string;
   letter_pdf_base64: string;
+  original_cv: Cv;
+  cv: Cv;
+  letter: CoverLetter;
+  photo_base64: string | null;
+};
+
+type RenderBody = {
+  cv_pdf_base64: string;
+  letter_pdf_base64: string;
 };
 
 type ErrorBody = { detail?: unknown; violations?: unknown };
@@ -47,23 +74,38 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 function isResultBody(body: unknown): body is ResultBody {
-  if (typeof body !== "object" || body === null) return false;
-  const record = body as Record<string, unknown>;
+  if (!isObject(body)) return false;
   return (
-    typeof record.job_title === "string" &&
-    typeof record.company === "string" &&
-    typeof record.language === "string" &&
-    typeof record.photo_used === "boolean" &&
-    typeof record.cv_pdf_base64 === "string" &&
-    typeof record.letter_pdf_base64 === "string"
+    typeof body.job_title === "string" &&
+    typeof body.company === "string" &&
+    typeof body.language === "string" &&
+    typeof body.photo_used === "boolean" &&
+    typeof body.cv_pdf_base64 === "string" &&
+    typeof body.letter_pdf_base64 === "string" &&
+    isObject(body.original_cv) &&
+    isObject(body.cv) &&
+    isObject(body.letter) &&
+    (body.photo_base64 === null || typeof body.photo_base64 === "string")
+  );
+}
+
+function isRenderBody(body: unknown): body is RenderBody {
+  return (
+    isObject(body) &&
+    typeof body.cv_pdf_base64 === "string" &&
+    typeof body.letter_pdf_base64 === "string"
   );
 }
 
 async function readErrorBody(response: Response): Promise<ErrorBody> {
   try {
     const body: unknown = await response.json();
-    return typeof body === "object" && body !== null ? (body as ErrorBody) : {};
+    return isObject(body) ? body : {};
   } catch {
     return {};
   }
@@ -99,6 +141,18 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 }
 
+async function post(path: string, init: RequestInit, signal?: AbortSignal): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetch(`${apiBaseUrl()}${path}`, { ...init, method: "POST", signal });
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new ApiError("Cannot reach the server. Check that the backend is running.", 0);
+  }
+  if (!response.ok) throw await toApiError(response);
+  return response.json().catch(() => null);
+}
+
 export async function createApplication(
   values: ApplicationRequestValues,
   signal?: AbortSignal,
@@ -108,19 +162,9 @@ export async function createApplication(
   body.append("job_text", values.jobText);
   body.append("include_photo", String(values.includePhoto));
 
-  let response: Response;
-  try {
-    response = await fetch(`${apiBaseUrl()}/applications`, { method: "POST", body, signal });
-  } catch (error) {
-    if (isAbortError(error)) throw error;
-    throw new ApiError("Cannot reach the server. Check that the backend is running.", 0);
-  }
-
-  if (!response.ok) throw await toApiError(response);
-
-  const data: unknown = await response.json().catch(() => null);
+  const data = await post("/applications", { body }, signal);
   if (!isResultBody(data)) {
-    throw new ApiError("The server sent an unexpected answer.", response.status);
+    throw new ApiError("The server sent an unexpected answer.", 200);
   }
   return {
     jobTitle: data.job_title,
@@ -129,5 +173,32 @@ export async function createApplication(
     photoUsed: data.photo_used,
     cvPdfBase64: data.cv_pdf_base64,
     letterPdfBase64: data.letter_pdf_base64,
+    originalCv: data.original_cv,
+    cv: data.cv,
+    letter: data.letter,
+    photoBase64: data.photo_base64,
   };
+}
+
+export async function renderDocuments(
+  values: RenderRequestValues,
+  signal?: AbortSignal,
+): Promise<RenderedDocuments> {
+  const data = await post(
+    "/render",
+    {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cv: values.cv,
+        letter: values.letter,
+        language: values.language,
+        photo_base64: values.photoBase64,
+      }),
+    },
+    signal,
+  );
+  if (!isRenderBody(data)) {
+    throw new ApiError("The server sent an unexpected answer.", 200);
+  }
+  return { cvPdfBase64: data.cv_pdf_base64, letterPdfBase64: data.letter_pdf_base64 };
 }
