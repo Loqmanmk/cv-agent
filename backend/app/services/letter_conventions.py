@@ -56,7 +56,102 @@ FRENCH = LetterConventions(
     overclaims=("expertise", "expert", "experte", "maîtrise parfaite"),
 )
 
-_BY_LANGUAGE: dict[str, LetterConventions] = {"fr": FRENCH}
+_GERMAN_CLOSING = (
+    "Über die Einladung zu einem persönlichen Gespräch würde ich mich sehr freuen. "
+    "Für weitere Informationen stehe ich Ihnen gerne zur Verfügung.\n\n"
+    "Mit freundlichen Grüßen"
+)
+
+GERMAN = LetterConventions(
+    language_name="German",
+    greeting="Sehr geehrte Damen und Herren,",
+    subject="Bewerbung als {title}",
+    subject_with_reference="Bewerbung als {title} - {reference}",
+    place_date="{city}, {day}. {month} {year}",
+    months=(
+        "Januar",
+        "Februar",
+        "März",
+        "April",
+        "Mai",
+        "Juni",
+        "Juli",
+        "August",
+        "September",
+        "Oktober",
+        "November",
+        "Dezember",
+    ),
+    closing={"m": _GERMAN_CLOSING, "f": _GERMAN_CLOSING},
+    overclaims=("Experte", "Expertin", "Expertise", "Meister", "Meisterin"),
+)
+
+_ENGLISH_CLOSING = (
+    "I would welcome the opportunity to discuss my application with you in an interview, "
+    "and I am happy to provide any further information you may need.\n\n"
+    "Yours sincerely,"
+)
+
+ENGLISH = LetterConventions(
+    language_name="English",
+    greeting="Dear Hiring Manager,",
+    subject="Application for the position of {title}",
+    subject_with_reference="Application for the position of {title} - {reference}",
+    place_date="{city}, {day} {month} {year}",
+    months=(
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ),
+    closing={"m": _ENGLISH_CLOSING, "f": _ENGLISH_CLOSING},
+    overclaims=("expert", "expertise", "mastery"),
+)
+
+_ARABIC_CLOSING = (
+    "يسعدني أن تتاح لي فرصة مقابلتكم لمناقشة طلبي، "
+    "وأنا رهن إشارتكم لتقديم أي معلومات إضافية.\n\n"
+    "وتفضلوا بقبول فائق الاحترام والتقدير،"
+)
+
+ARABIC = LetterConventions(
+    language_name="Arabic (Modern Standard Arabic)",
+    greeting="تحية طيبة وبعد،",
+    subject="الموضوع: الترشح لمنصب {title}",
+    subject_with_reference="الموضوع: الترشح لمنصب {title} - {reference}",
+    place_date="{city}، في {day} {month} {year}",
+    months=(
+        "يناير",
+        "فبراير",
+        "مارس",
+        "أبريل",
+        "مايو",
+        "يونيو",
+        "يوليو",
+        "أغسطس",
+        "سبتمبر",
+        "أكتوبر",
+        "نوفمبر",
+        "ديسمبر",
+    ),
+    closing={"m": _ARABIC_CLOSING, "f": _ARABIC_CLOSING},
+    overclaims=("خبير", "خبيرة", "متقن", "إتقان تام"),
+)
+
+_BY_LANGUAGE: dict[str, LetterConventions] = {
+    "fr": FRENCH,
+    "de": GERMAN,
+    "en": ENGLISH,
+    "ar": ARABIC,
+}
 
 
 def conventions_for(language: str) -> LetterConventions:

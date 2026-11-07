@@ -79,7 +79,7 @@ def test_an_unsupported_language_is_refused() -> None:
     service, _ = make_service()
 
     with pytest.raises(UnsupportedLetterLanguageError):
-        service.render(make_request(language="de"))
+        service.render(make_request(language="other"))
 
 
 def test_documents_that_are_too_long_are_refused() -> None:

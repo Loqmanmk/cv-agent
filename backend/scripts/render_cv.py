@@ -5,7 +5,7 @@ from pathlib import Path
 from PIL import Image
 
 from app.domain.cv import CV
-from app.domain.cv_labels import FRENCH_LABELS
+from app.domain.cv_labels import LABELS_BY_LANGUAGE
 from app.domain.document import ExtractedImage
 from app.infrastructure.cv_html_builder import CVHtmlBuilder
 from app.infrastructure.pdf_converter import PlaywrightPdfConverter
@@ -23,7 +23,10 @@ def load_photo(path: Path) -> ExtractedImage:
     return ExtractedImage(content, path.suffix, width, height)
 
 
-def main() -> None:
+def main(language: str) -> None:
+    labels = LABELS_BY_LANGUAGE.get(language)
+    if labels is None:
+        sys.exit(f"Language must be one of: {', '.join(LABELS_BY_LANGUAGE)}")
     cv_file = DATA / "extracted" / "tailored_cv.json"
     cv = CV.model_validate_json(cv_file.read_text(encoding="utf-8"))
     photo = load_photo(DATA / "extracted" / "image1.png")
@@ -31,7 +34,7 @@ def main() -> None:
     converter = PlaywrightPdfConverter()
 
     def render(settings: FitSettings) -> bytes:
-        html = builder.build(cv, photo, FRENCH_LABELS, settings.font_size, settings.spacing)
+        html = builder.build(cv, photo, labels, settings.font_size, settings.spacing)
         return converter.to_pdf(html)
 
     try:
@@ -39,14 +42,12 @@ def main() -> None:
     except PageOverflowError as error:
         sys.exit(f"Failed: {error}")
 
-    settings = result.settings
-    html = builder.build(cv, photo, FRENCH_LABELS, settings.font_size, settings.spacing)
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    (OUTPUT / "cv.html").write_text(html, encoding="utf-8")
-    (OUTPUT / "cv.pdf").write_bytes(result.pdf)
-    print(f"Saved to {OUTPUT / 'cv.pdf'}")
-    print(f"1 page, font {settings.font_size} pt, spacing {settings.spacing}")
+    target = OUTPUT / f"cv_{language}.pdf"
+    target.write_bytes(result.pdf)
+    print(f"Saved to {target}")
+    print(f"1 page, font {result.settings.font_size} pt, spacing {result.settings.spacing}")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else "fr")

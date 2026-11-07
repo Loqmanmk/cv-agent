@@ -63,7 +63,7 @@ def test_gives_up_after_the_maximum_attempts() -> None:
     assert MAX_WORDS > 0
 
 
-@pytest.mark.parametrize("language", ["de", "en", "ar"])
+@pytest.mark.parametrize("language", ["other"])
 def test_unsupported_language_fails_before_calling_the_ai(language: OfferLanguage) -> None:
     provider = FakeLLMProvider(make_body())
 
@@ -93,3 +93,13 @@ def test_company_summary_reaches_the_prompt() -> None:
     system_prompt, user_prompt = provider.calls[0]
     assert "company_summary" in system_prompt
     assert "Acme insures trade credit." in user_prompt
+
+
+def test_prompt_names_the_language_and_asks_for_western_digits() -> None:
+    provider = FakeLLMProvider(make_body())
+
+    LetterWriter(provider).write(make_cv(), make_offer("ar"), "m")
+
+    system_prompt, _ = provider.calls[0]
+    assert "Modern Standard Arabic" in system_prompt
+    assert "Western digits" in system_prompt

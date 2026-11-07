@@ -23,6 +23,7 @@ Rules:
 - Name the company at least once. Use company facts only from company_summary or the offer,
   and copy any number exactly. Never invent a fact about the company.
 - First person, professional and warm tone, 50 to 90 words per paragraph.
+- Write numbers with Western digits (0-9) in every language, including Arabic.
 - Use only facts from the CV. Never invent an experience, skill, tool, number or achievement.
 - Attribute every skill to the exact place the CV shows it: a named project, or a named
   internship. Never say "internships" for work that the CV lists under projects.

@@ -14,20 +14,20 @@
     color: #000;
   }
   .sender { margin-bottom: {{ '%.2f' | format(1.6 * spacing) }}em; }
-  .recipient { text-align: right; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
-  .place-date { text-align: right; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
+  .recipient { text-align: end; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
+  .place-date { text-align: end; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
   .subject { font-weight: bold; margin-bottom: {{ '%.2f' | format(1.2 * spacing) }}em; }
   .greeting { margin-bottom: {{ '%.2f' | format(1.0 * spacing) }}em; }
-  p { margin: 0 0 {{ '%.2f' | format(0.9 * spacing) }}em; text-align: justify; }
-  .signature { margin-top: {{ '%.2f' | format(1.2 * spacing) }}em; text-align: right; font-weight: bold; }
+  p { margin: 0 0 {{ '%.2f' | format(0.9 * spacing) }}em; text-align: justify; white-space: pre-line; }
+  .signature { margin-top: {{ '%.2f' | format(1.2 * spacing) }}em; text-align: end; font-weight: bold; }
 </style>
 </head>
 <body>
 <div class="sender">
   <div><strong>{{ letter.sender.name }}</strong></div>
   {% if letter.sender.address %}<div>{{ letter.sender.address }}</div>{% endif %}
-  <div>{{ letter.sender.email }}</div>
-  <div>{{ letter.sender.phone }}</div>
+  <div><bdi>{{ letter.sender.email }}</bdi></div>
+  <div><bdi>{{ letter.sender.phone }}</bdi></div>
 </div>
 
 <div class="recipient">

@@ -119,7 +119,7 @@ def test_refuses_unknown_fields_in_the_cv() -> None:
 def test_refuses_an_unsupported_language() -> None:
     client, _ = make_render_client()
 
-    assert client.post("/render", json=payload(language="de")).status_code == 422
+    assert client.post("/render", json=payload(language="other")).status_code == 422
 
 
 def test_refuses_an_unknown_language_value() -> None:

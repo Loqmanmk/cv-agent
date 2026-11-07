@@ -242,3 +242,9 @@ def test_the_result_keeps_the_original_cv_next_to_the_tailored_one() -> None:
 
     assert result.original_cv.profile == make_cv().profile
     assert result.cv.profile == "Rewritten profile."
+
+
+def test_the_pipeline_is_limited_to_french_until_translation_exists() -> None:
+    from app.services.application_service import PIPELINE_LANGUAGES
+
+    assert frozenset({"fr"}) == PIPELINE_LANGUAGES

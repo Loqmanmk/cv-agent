@@ -21,7 +21,7 @@ from app.services.cv_tailor import CVTailor
 from app.services.document_renderer import CVHtmlRenderer, DocumentRenderer, LetterHtmlRenderer
 from app.services.job_analyzer import JobAnalyzer
 from app.services.letter_assembler import LetterAssembler
-from app.services.letter_conventions import conventions_for
+from app.services.letter_conventions import UnsupportedLetterLanguageError
 from app.services.letter_writer import LetterWriter
 from app.services.masking_llm_provider import MaskingLLMProvider
 from app.services.photo_selector import PhotoSelector
@@ -30,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 MAX_CV_BYTES = 5_000_000
 SIGNATURES = {".docx": b"PK", ".pdf": b"%PDF"}
+# German, English and Arabic need the CV translation step before they can be enabled.
+PIPELINE_LANGUAGES = frozenset({"fr"})
 
 
 class InvalidApplicationInputError(Exception):
@@ -86,7 +88,9 @@ class ApplicationService:
         parsed = self._parse(request)
         logger.info("stage 1/5: analyzing the job offer")
         offer = JobAnalyzer(self._public_llm).analyze(request.job_text)
-        conventions_for(offer.language)  # fail early, before spending more AI calls
+        if offer.language not in PIPELINE_LANGUAGES:  # fail early, before more AI calls
+            message = f"Applications in '{offer.language}' are not available yet."
+            raise UnsupportedLetterLanguageError(message)
         logger.info("stage 2/5: structuring the CV")
         cv = CVStructurer(self._private_llm).structure(parsed.text)
         logger.info("stage 3/5: tailoring the CV")

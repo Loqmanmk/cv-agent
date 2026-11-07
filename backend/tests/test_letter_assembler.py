@@ -94,7 +94,7 @@ def test_sender_block_greeting_and_signature() -> None:
     assert letter.signature == "Jane Doe"
 
 
-@pytest.mark.parametrize("language", ["de", "en", "ar", "other"])
+@pytest.mark.parametrize("language", ["other"])
 def test_unsupported_language_is_refused(language: OfferLanguage) -> None:
     with pytest.raises(UnsupportedLetterLanguageError):
         assemble(make_offer(language=language))

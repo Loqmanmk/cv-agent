@@ -26,7 +26,7 @@
   .row { display: flex; justify-content: space-between; gap: 3mm; }
   .right { white-space: nowrap; font-weight: bold; }
   .entry { margin-bottom: {{ '%.2f' | format(0.25 * spacing) }}em; }
-  ul { margin: 0.1em 0 0; padding-left: 1.2em; }
+  ul { margin: 0.1em 0 0; padding-inline-start: 1.2em; }
   li, p { margin: 0; }
   a { color: #1a4f8b; text-decoration: underline; }
 </style>
@@ -42,15 +42,15 @@
     <h1>{{ cv.header.name }}</h1>
     <div>{{ cv.header.headline }}</div>
     {% if cv.header.target_line %}<div>{{ cv.header.target_line }}</div>{% endif %}
-    <div><strong>{{ labels.phone }} :</strong> {{ cv.header.phone }} &nbsp;|&nbsp; <strong>{{ labels.email }} :</strong> {{ cv.header.email }}</div>
+    <div><strong>{{ labels.phone }}{{ labels.colon }}</strong> <bdi>{{ cv.header.phone }}</bdi> &nbsp;|&nbsp; <strong>{{ labels.email }}{{ labels.colon }}</strong> <bdi>{{ cv.header.email }}</bdi></div>
     {% if cv.header.linkedin or cv.header.github %}
     <div>
-      {% if cv.header.linkedin %}<strong>LinkedIn :</strong> {{ link(cv.header.linkedin) }}{% endif %}
+      {% if cv.header.linkedin %}<strong>LinkedIn{{ labels.colon }}</strong> <bdi>{{ link(cv.header.linkedin) }}</bdi>{% endif %}
       {% if cv.header.linkedin and cv.header.github %}&nbsp;|&nbsp;{% endif %}
-      {% if cv.header.github %}<strong>GitHub :</strong> {{ link(cv.header.github) }}{% endif %}
+      {% if cv.header.github %}<strong>GitHub{{ labels.colon }}</strong> <bdi>{{ link(cv.header.github) }}</bdi>{% endif %}
     </div>
     {% endif %}
-    {% if cv.header.location %}<div><strong>{{ labels.location }} :</strong> {{ cv.header.location }}</div>{% endif %}
+    {% if cv.header.location %}<div><strong>{{ labels.location }}{{ labels.colon }}</strong> {{ cv.header.location }}</div>{% endif %}
   </div>
   {% if photo_uri %}<img class="photo" src="{{ photo_uri }}" alt="">{% endif %}
 </header>
@@ -94,7 +94,7 @@
 {% if cv.skills %}
 <h2>{{ labels.skills }}</h2>
 {% for g in cv.skills %}
-<div><strong>{{ g.category }} :</strong> {{ g.items | join(", ") }}</div>
+<div><strong>{{ g.category }}{{ labels.colon }}</strong> {{ g.items | join(", ") }}</div>
 {% endfor %}
 {% endif %}
 
@@ -107,7 +107,7 @@
 
 {% if cv.languages %}
 <h2>{{ labels.languages }}</h2>
-<div>{% for l in cv.languages %}{{ l.name }} : {{ l.level }}{% if not loop.last %} &nbsp;|&nbsp; {% endif %}{% endfor %}</div>
+<div>{% for l in cv.languages %}{{ l.name }}{{ labels.colon }} {{ l.level }}{% if not loop.last %} &nbsp;|&nbsp; {% endif %}{% endfor %}</div>
 {% endif %}
 
 {% if cv.interests %}

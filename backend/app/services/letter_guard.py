@@ -9,7 +9,7 @@ from app.services.tailoring_guard import contains_term, numbers_in, strings_in
 MIN_WORDS = 30
 MAX_WORDS = 130
 BRACKETS = re.compile(r"[\[\]{}<>]")
-INCLUSIVE_FORM = re.compile(r"\((?:e|s|se)\)", re.IGNORECASE)
+INCLUSIVE_FORM = re.compile(r"\((?:e|s|se|in|ة)\)", re.IGNORECASE)
 
 
 class LetterViolationError(Exception):

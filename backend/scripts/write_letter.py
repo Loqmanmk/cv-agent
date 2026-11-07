@@ -15,15 +15,20 @@ from app.services.letter_writer import LetterWriter
 from app.services.masking_llm_provider import MaskingLLMProvider
 
 DATA = Path("../data/extracted")
+LANGUAGES = ("fr", "de", "en", "ar")
 
 
-def main() -> None:
+def main(language: str | None) -> None:
+    if language is not None and language not in LANGUAGES:
+        sys.exit(f"Language must be one of: {', '.join(LANGUAGES)}")
     settings = get_settings()
     if not settings.applicant_city:
         sys.exit("APPLICANT_CITY is missing in backend/.env")
 
     cv = CV.model_validate_json((DATA / "tailored_cv.json").read_text(encoding="utf-8"))
     offer = JobOffer.model_validate_json((DATA / "job.json").read_text(encoding="utf-8"))
+    if language is not None:
+        offer = offer.model_copy(update={"language": language})
     sender = LetterSender(
         name=cv.header.name,
         email=cv.header.email,
@@ -42,14 +47,14 @@ def main() -> None:
         sys.exit(f"Failed: {error}")
 
     letter = LetterAssembler().assemble(body, offer, sender, date.today())
-    (DATA / "letter.json").write_text(letter.model_dump_json(indent=2), encoding="utf-8")
+    target = DATA / f"letter_{offer.language}.json"
+    target.write_text(letter.model_dump_json(indent=2), encoding="utf-8")
 
-    recipient = [letter.recipient.contact, letter.recipient.company, letter.recipient.address]
-    print("\n".join(line for line in recipient if line))
-    print(f"\n{letter.place_date}\n\n{letter.subject}\n\n{letter.greeting}\n")
+    print(f"Saved to {target}\n")
+    print(f"{letter.place_date}\n\n{letter.subject}\n\n{letter.greeting}\n")
     print("\n\n".join(letter.paragraphs))
     print(f"\n{letter.signature}")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)
