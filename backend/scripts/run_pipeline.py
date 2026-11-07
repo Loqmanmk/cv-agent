@@ -30,6 +30,7 @@ GUARD_ERRORS = (TailoringViolationError, LetterViolationError, TranslationViolat
 def main(cv_path: str, job_path: str) -> None:
     logging.basicConfig(level=logging.INFO)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("google_genai").setLevel(logging.WARNING)
     settings = get_settings()
     if not settings.applicant_city:
         sys.exit("APPLICANT_CITY is missing in backend/.env")

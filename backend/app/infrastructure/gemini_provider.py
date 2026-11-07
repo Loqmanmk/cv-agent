@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from collections.abc import Callable
 
@@ -17,6 +18,16 @@ BASE_DELAY_SECONDS = 2.0
 RETRYABLE_CODES = {500, 502, 503, 504}
 UNAVAILABLE_CODES = RETRYABLE_CODES | {429}
 MAX_DETAIL_CHARS = 600
+RETRY_HINT = re.compile(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", re.IGNORECASE)
+
+
+def parse_retry_seconds(message: str) -> float | None:
+    """Read Google's 'Please retry in 10h25m43.9s' hint, in seconds."""
+    match = RETRY_HINT.search(message)
+    if match is None or not any(match.groups()):
+        return None
+    hours, minutes, seconds = match.groups()
+    return int(hours or 0) * 3600 + int(minutes or 0) * 60 + float(seconds or 0)
 
 
 def _strip_additional_properties(node: object) -> object:
@@ -86,7 +97,10 @@ class GeminiProvider(LLMProvider):
 
     def _to_llm_error(self, exc: errors.APIError) -> LLMError:
         if exc.code in UNAVAILABLE_CODES:
-            detail = (exc.message or "")[:MAX_DETAIL_CHARS]
-            message = f"Gemini {self._model} unavailable (code {exc.code}): {detail}"
-            return LLMUnavailableError(message)
+            message = exc.message or ""
+            retry = parse_retry_seconds(message) if exc.code == 429 else None
+            text = (
+                f"Gemini {self._model} unavailable (code {exc.code}): {message[:MAX_DETAIL_CHARS]}"
+            )
+            return LLMUnavailableError(text, retry)
         return LLMError(f"Gemini request failed (code {exc.code}).")
