@@ -1,3 +1,4 @@
+import logging
 import sys
 from datetime import date
 from pathlib import Path
@@ -7,11 +8,12 @@ from app.domain.llm import LLMError
 from app.infrastructure.application_factory import build_application_service
 from app.services.application_service import ApplicationRequest, InvalidApplicationInputError
 from app.services.cv_structurer import CVStructuringError
-from app.services.cv_tailor import TailoringViolationError
 from app.services.job_analyzer import JobAnalysisError
 from app.services.letter_conventions import UnsupportedLetterLanguageError
 from app.services.letter_guard import LetterViolationError
 from app.services.page_fitter import PageOverflowError
+from app.services.tailoring_guard import TailoringViolationError
+from app.services.translation_guard import TranslationViolationError
 
 OUTPUT = Path("../data/output")
 EXPECTED_ERRORS = (
@@ -22,9 +24,12 @@ EXPECTED_ERRORS = (
     LLMError,
     PageOverflowError,
 )
+GUARD_ERRORS = (TailoringViolationError, LetterViolationError, TranslationViolationError)
 
 
 def main(cv_path: str, job_path: str) -> None:
+    logging.basicConfig(level=logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     settings = get_settings()
     if not settings.applicant_city:
         sys.exit("APPLICANT_CITY is missing in backend/.env")
@@ -38,21 +43,23 @@ def main(cv_path: str, job_path: str) -> None:
         city=settings.applicant_city,
         gender=settings.applicant_gender,
         today=date.today(),
+        cv_language=settings.applicant_cv_language,
     )
 
     try:
         result = build_application_service(settings).create(request)
-    except (TailoringViolationError, LetterViolationError) as error:
+    except GUARD_ERRORS as error:
         sys.exit("Rejected by a faithfulness guard:\n- " + "\n- ".join(error.violations))
     except EXPECTED_ERRORS as error:
         sys.exit(f"Failed: {error}")
 
+    language = result.offer.language
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    (OUTPUT / "cv.pdf").write_bytes(result.cv_pdf)
-    (OUTPUT / "letter.pdf").write_bytes(result.letter_pdf)
-    print(f"Job: {result.offer.title} at {result.offer.company} ({result.offer.language})")
+    (OUTPUT / f"cv_{language}.pdf").write_bytes(result.cv_pdf)
+    (OUTPUT / f"letter_{language}.pdf").write_bytes(result.letter_pdf)
+    print(f"Job: {result.offer.title} at {result.offer.company} ({language})")
     print(f"Photo used: {result.photo_used}")
-    print(f"Saved to {OUTPUT / 'cv.pdf'} and {OUTPUT / 'letter.pdf'}")
+    print(f"Saved to {OUTPUT / f'cv_{language}.pdf'} and {OUTPUT / f'letter_{language}.pdf'}")
 
 
 if __name__ == "__main__":

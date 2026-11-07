@@ -1,7 +1,12 @@
 from app.domain.cv import CV, Project
 from app.domain.job import JobOffer
 from app.domain.llm import LLMProvider
-from app.services.tailoring_guard import TailoringGuard, TailoringViolationError, contains_term
+from app.services.tailoring_guard import (
+    TailoringGuard,
+    TailoringViolationError,
+    contains_term,
+    project_name,
+)
 
 MAX_ATTEMPTS = 3
 
@@ -24,6 +29,8 @@ You MUST NOT:
 - Change names, contact details, project titles, employers, job titles, cities, dates,
   degrees, schools, certifications or language levels.
 - Add more bullets than an entry already has.
+- Reorder, add or remove experiences: keep the same experiences in the same order.
+- Rewrite titles, company names, cities or dates: copy them character for character.
 - Put the offer's job title or company name in the headline. The headline describes the
   candidate, never the position applied for.
 - Translate. Keep the original language of the CV.
@@ -76,9 +83,9 @@ class CVTailor:
         terms = list(
             dict.fromkeys([*offer.required_skills, *offer.nice_to_have_skills, *offer.keywords])
         )
-        kept_titles = {project.title for project in tailored.projects}
-        kept = [project for project in cv.projects if project.title in kept_titles]
-        dropped = [project for project in cv.projects if project.title not in kept_titles]
+        kept_names = {project_name(project.title) for project in tailored.projects}
+        kept = [p for p in cv.projects if project_name(p.title) in kept_names]
+        dropped = [p for p in cv.projects if project_name(p.title) not in kept_names]
         weakest_kept = min((_relevance(project, terms) for project in kept), default=0)
         return [
             f"project '{project.title}' fits the offer better than a project you kept"

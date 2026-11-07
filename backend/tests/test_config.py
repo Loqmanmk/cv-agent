@@ -46,3 +46,12 @@ def test_gender_must_be_m_or_f(monkeypatch: pytest.MonkeyPatch) -> None:
 
     with pytest.raises(ValidationError):
         IsolatedSettings()
+
+
+def test_cv_language_defaults_to_french_and_is_validated(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("APPLICANT_CV_LANGUAGE", raising=False)
+    assert IsolatedSettings().applicant_cv_language == "fr"
+
+    monkeypatch.setenv("APPLICANT_CV_LANGUAGE", "xx")
+    with pytest.raises(ValidationError):
+        IsolatedSettings()

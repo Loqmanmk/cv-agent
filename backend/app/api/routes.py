@@ -67,6 +67,7 @@ def create_application(
         gender=settings.applicant_gender,
         today=date.today(),
         include_photo=include_photo,
+        cv_language=settings.applicant_cv_language,
     )
     result = service.create(request)
     return ApplicationResponse(

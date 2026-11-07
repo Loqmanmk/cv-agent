@@ -94,6 +94,7 @@ def make_request(
     filename: str = "cv.docx",
     content: bytes | None = None,
     include_photo: bool = True,
+    cv_language: OfferLanguage = "fr",
 ) -> ApplicationRequest:
     return ApplicationRequest(
         cv_filename=filename,
@@ -104,6 +105,7 @@ def make_request(
         gender="m",
         today=date(2026, 11, 6),
         include_photo=include_photo,
+        cv_language=cv_language,
     )
 
 
@@ -190,7 +192,7 @@ def test_a_file_that_is_too_large_is_refused() -> None:
 
 
 def test_an_unsupported_offer_language_stops_after_one_ai_call() -> None:
-    service, provider, _ = make_service([make_offer(language="de")])
+    service, provider, _ = make_service([make_offer(language="other")])
 
     with pytest.raises(UnsupportedLetterLanguageError):
         service.create(make_request())
@@ -244,7 +246,54 @@ def test_the_result_keeps_the_original_cv_next_to_the_tailored_one() -> None:
     assert result.cv.profile == "Rewritten profile."
 
 
-def test_the_pipeline_is_limited_to_french_until_translation_exists() -> None:
-    from app.services.application_service import PIPELINE_LANGUAGES
+def test_a_german_offer_translates_the_cv_before_tailoring() -> None:
+    from tests.test_translation_guard import german
 
-    assert frozenset({"fr"}) == PIPELINE_LANGUAGES
+    translated = german(make_cv())
+    tailored = translated.model_copy(update={"profile": "Neu geschriebenes Profil."})
+    answers: list[BaseModel] = [make_offer("de"), make_cv(), translated, tailored, make_body()]
+    service, provider, converter = make_service(answers)
+
+    result = service.create(make_request())
+
+    assert len(provider.calls) == 5
+    assert "German" in provider.calls[2][0]
+    assert result.original_cv.header.headline == "Ingenieurstudentin"
+    assert result.cv.profile == "Neu geschriebenes Profil."
+    assert "Berufserfahrung" in converter.pages[0]
+    assert "Sehr geehrte Damen und Herren," in converter.pages[1]
+
+
+def test_contact_details_never_reach_the_ai_during_translation() -> None:
+    from tests.test_translation_guard import german
+
+    translated = german(make_cv())
+    answers: list[BaseModel] = [make_offer("de"), make_cv(), translated, translated, make_body()]
+    service, provider, _ = make_service(answers)
+
+    service.create(make_request())
+
+    translation_prompt = provider.calls[2][1]
+    assert "jane@example.com" not in translation_prompt
+    assert "+00 000 000 000" not in translation_prompt
+
+
+def test_no_translation_when_the_cv_is_already_in_the_offer_language() -> None:
+    answers: list[BaseModel] = [make_offer("de"), make_cv(), make_cv(), make_body()]
+    service, provider, _ = make_service(answers)
+
+    service.create(make_request(cv_language="de"))
+
+    assert len(provider.calls) == 4
+
+
+def test_a_translation_that_breaks_the_guard_stops_the_pipeline() -> None:
+    from app.services.translation_guard import TranslationViolationError
+
+    answers: list[BaseModel] = [make_offer("de"), make_cv(), *[make_cv()] * 3]
+    service, provider, _ = make_service(answers)
+
+    with pytest.raises(TranslationViolationError):
+        service.create(make_request())
+
+    assert len(provider.calls) == 5

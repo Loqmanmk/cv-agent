@@ -16,7 +16,7 @@ MAX_ATTEMPTS = 4
 BASE_DELAY_SECONDS = 2.0
 RETRYABLE_CODES = {500, 502, 503, 504}
 UNAVAILABLE_CODES = RETRYABLE_CODES | {429}
-MAX_DETAIL_CHARS = 200
+MAX_DETAIL_CHARS = 600
 
 
 def _strip_additional_properties(node: object) -> object:
@@ -80,6 +80,7 @@ class GeminiProvider(LLMProvider):
                 raise LLMUnavailableError(f"Gemini {self._model}: network error.") from exc
             if not response.text:
                 raise LLMError("Gemini returned no content.")
+            logger.info("%s answered", self._model)
             return str(response.text)
         raise LLMError("Gemini request failed.")
 

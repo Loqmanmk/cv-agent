@@ -12,6 +12,7 @@ from app.services.letter_conventions import UnsupportedLetterLanguageError
 from app.services.letter_guard import LetterViolationError
 from app.services.page_fitter import PageOverflowError
 from app.services.tailoring_guard import TailoringViolationError
+from app.services.translation_guard import TranslationViolationError
 
 logger = logging.getLogger(__name__)
 
@@ -54,3 +55,4 @@ def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(LLMError, _bad_gateway)
     app.add_exception_handler(TailoringViolationError, _unfaithful)
     app.add_exception_handler(LetterViolationError, _unfaithful)
+    app.add_exception_handler(TranslationViolationError, _unfaithful)

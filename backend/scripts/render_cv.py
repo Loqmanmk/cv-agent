@@ -27,7 +27,9 @@ def main(language: str) -> None:
     labels = LABELS_BY_LANGUAGE.get(language)
     if labels is None:
         sys.exit(f"Language must be one of: {', '.join(LABELS_BY_LANGUAGE)}")
-    cv_file = DATA / "extracted" / "tailored_cv.json"
+    cv_file = DATA / "extracted" / f"tailored_cv_{language}.json"
+    if not cv_file.exists():
+        cv_file = DATA / "extracted" / "tailored_cv.json"
     cv = CV.model_validate_json(cv_file.read_text(encoding="utf-8"))
     photo = load_photo(DATA / "extracted" / "image1.png")
     builder = CVHtmlBuilder()

@@ -3,6 +3,8 @@ import re
 from app.domain.cv import CV
 
 LOCKED_HEADER_FIELDS = ("name", "phone", "email", "linkedin", "github", "location")
+LOCKED_EXPERIENCE_FIELDS = ("title", "company", "city", "start", "end")
+PROJECT_SEPARATOR = " - "
 NUMBER = re.compile(r"\d[\d.,%]*")
 
 
@@ -31,6 +33,11 @@ def numbers_in(text: str) -> set[str]:
 def contains_term(text: str, term: str) -> bool:
     pattern = rf"(?<!\w){re.escape(term.strip())}(?!\w)"
     return re.search(pattern, text, re.IGNORECASE) is not None
+
+
+def project_name(title: str) -> str:
+    """The stable part of a project title: the name before the first separator."""
+    return title.split(PROJECT_SEPARATOR)[0]
 
 
 def _tailorable_text(cv: CV) -> list[str]:
@@ -82,8 +89,10 @@ class TailoringGuard:
         found: list[str] = []
         pairs = zip(original.experiences, tailored.experiences, strict=True)
         for index, (before, after) in enumerate(pairs, start=1):
-            if before.model_dump(exclude={"bullets"}) != after.model_dump(exclude={"bullets"}):
-                found.append(f"experience {index}: title, company, city or dates changed")
+            for field in LOCKED_EXPERIENCE_FIELDS:
+                old, new = getattr(before, field), getattr(after, field)
+                if old != new:
+                    found.append(f"experience {index}: {field} must stay '{old}', not '{new}'")
             if len(after.bullets) > len(before.bullets):
                 found.append(f"experience {index}: more bullets than the original")
         return found
@@ -91,11 +100,15 @@ class TailoringGuard:
     @staticmethod
     def _project_violations(original: CV, tailored: CV) -> list[str]:
         originals = {project.title: project for project in original.projects}
+        titles = ", ".join(f"'{title}'" for title in originals)
         found: list[str] = []
         for project in tailored.projects:
             before = originals.get(project.title)
             if before is None:
-                found.append(f"project '{project.title}' is not in the original CV")
+                found.append(
+                    f"project '{project.title}' is not in the original CV; "
+                    f"copy a title exactly from: {titles}"
+                )
             elif len(project.bullets) > len(before.bullets):
                 found.append(f"project '{project.title}': more bullets than the original")
         return found

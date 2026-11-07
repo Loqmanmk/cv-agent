@@ -12,16 +12,17 @@ from app.domain.document import (
     ParsedDocument,
     PhotoSanitizer,
 )
-from app.domain.job import JobOffer
+from app.domain.job import JobOffer, OfferLanguage
 from app.domain.letter import CoverLetter, Gender, LetterSender
 from app.domain.llm import LLMProvider
 from app.domain.pdf import PdfConverter, PdfPageCounter
 from app.services.cv_structurer import CVStructurer
 from app.services.cv_tailor import CVTailor
+from app.services.cv_translator import CVTranslator
 from app.services.document_renderer import CVHtmlRenderer, DocumentRenderer, LetterHtmlRenderer
 from app.services.job_analyzer import JobAnalyzer
 from app.services.letter_assembler import LetterAssembler
-from app.services.letter_conventions import UnsupportedLetterLanguageError
+from app.services.letter_conventions import conventions_for
 from app.services.letter_writer import LetterWriter
 from app.services.masking_llm_provider import MaskingLLMProvider
 from app.services.photo_selector import PhotoSelector
@@ -30,8 +31,6 @@ logger = logging.getLogger(__name__)
 
 MAX_CV_BYTES = 5_000_000
 SIGNATURES = {".docx": b"PK", ".pdf": b"%PDF"}
-# German, English and Arabic need the CV translation step before they can be enabled.
-PIPELINE_LANGUAGES = frozenset({"fr"})
 
 
 class InvalidApplicationInputError(Exception):
@@ -48,6 +47,7 @@ class ApplicationRequest:
     gender: Gender
     today: date
     include_photo: bool = True
+    cv_language: OfferLanguage = "fr"
 
 
 @dataclass(frozen=True)
@@ -86,16 +86,17 @@ class ApplicationService:
 
     def create(self, request: ApplicationRequest) -> ApplicationResult:
         parsed = self._parse(request)
-        logger.info("stage 1/5: analyzing the job offer")
+        logger.info("stage: analyzing the job offer")
         offer = JobAnalyzer(self._public_llm).analyze(request.job_text)
-        if offer.language not in PIPELINE_LANGUAGES:  # fail early, before more AI calls
-            message = f"Applications in '{offer.language}' are not available yet."
-            raise UnsupportedLetterLanguageError(message)
-        logger.info("stage 2/5: structuring the CV")
+        conventions_for(offer.language)  # fail early, before spending more AI calls
+        logger.info("stage: structuring the CV")
         cv = CVStructurer(self._private_llm).structure(parsed.text)
-        logger.info("stage 3/5: tailoring the CV")
+        if request.cv_language != offer.language:
+            logger.info("stage: translating the CV to %s", offer.language)
+            cv = CVTranslator(self._private_llm).translate(cv, offer.language)
+        logger.info("stage: tailoring the CV")
         tailored = CVTailor(self._private_llm).tailor(cv, offer)
-        logger.info("stage 4/5: writing the letter")
+        logger.info("stage: writing the letter")
         body = LetterWriter(self._private_llm).write(tailored, offer, request.gender)
         sender = LetterSender(
             name=tailored.header.name,
@@ -107,7 +108,7 @@ class ApplicationService:
         )
         letter = LetterAssembler().assemble(body, offer, sender, request.today)
         photo = self._select_photo(parsed.images, request.include_photo)
-        logger.info("stage 5/5: rendering the PDFs")
+        logger.info("stage: rendering the PDFs")
         documents = self._renderer.render(tailored, letter, photo, offer.language)
         return ApplicationResult(
             offer=offer,
