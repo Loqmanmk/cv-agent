@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.16.2",
     "pymupdf>=2.1",
     "python-docx>=1.2.0",
+    "python-multipart>=0.0.33",
     "uvicorn[standard]>=0.54.0",
 ]
 
@@ -29,6 +30,7 @@ build-backend = "uv_build"
 [dependency-groups]
 dev = [
     "commitizen>=4.19.3",
+    "httpx>=0.28.1",
     "mypy>=2.4.1",
     "pre-commit>=4.7.0",
     "pytest>=9.2.0",
@@ -60,3 +62,6 @@ addopts = "--cov=app --cov-report=term-missing"
 [[tool.mypy.overrides]]
 module = "pymupdf.*"
 follow_imports = "skip"
+
+[tool.coverage.run]
+concurrency = ["greenlet", "thread"]

@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
@@ -21,7 +22,10 @@ from app.services.masking_llm_provider import MaskingLLMProvider
 from app.services.page_fitter import LADDER, LETTER_LADDER, FitSettings, OnePageFitter
 from app.services.photo_selector import PhotoSelector
 
+logger = logging.getLogger(__name__)
+
 MAX_CV_BYTES = 5_000_000
+SIGNATURES = {".docx": b"PK", ".pdf": b"%PDF"}
 
 
 class InvalidApplicationInputError(Exception):
@@ -94,10 +98,14 @@ class ApplicationService:
 
     def create(self, request: ApplicationRequest) -> ApplicationResult:
         parsed = self._parse(request)
+        logger.info("stage 1/5: analyzing the job offer")
         offer = JobAnalyzer(self._public_llm).analyze(request.job_text)
         conventions_for(offer.language)  # fail early, before spending more AI calls
+        logger.info("stage 2/5: structuring the CV")
         cv = CVStructurer(self._private_llm).structure(parsed.text)
+        logger.info("stage 3/5: tailoring the CV")
         tailored = CVTailor(self._private_llm).tailor(cv, offer)
+        logger.info("stage 4/5: writing the letter")
         body = LetterWriter(self._private_llm).write(tailored, offer, request.gender)
         sender = LetterSender(
             name=tailored.header.name,
@@ -109,6 +117,7 @@ class ApplicationService:
         )
         letter = LetterAssembler().assemble(body, offer, sender, request.today)
         photo = PhotoSelector().select(parsed.images) if request.include_photo else None
+        logger.info("stage 5/5: rendering the PDFs")
         labels = LABELS_BY_LANGUAGE[offer.language]
         return ApplicationResult(
             offer=offer,
@@ -129,7 +138,17 @@ class ApplicationService:
             raise InvalidApplicationInputError("The CV file is empty.")
         if len(request.cv_content) > MAX_CV_BYTES:
             raise InvalidApplicationInputError("The CV file is too large (5 MB maximum).")
-        return parser.parse(request.cv_content)
+        return self._safe_parse(parser, extension, request.cv_content)
+
+    @staticmethod
+    def _safe_parse(parser: DocumentParser, extension: str, content: bytes) -> ParsedDocument:
+        signature = SIGNATURES.get(extension)
+        if signature and not content.startswith(signature):
+            raise InvalidApplicationInputError("The file content does not match its extension.")
+        try:
+            return parser.parse(content)
+        except Exception as exc:  # untrusted file: any parser failure is an input problem
+            raise InvalidApplicationInputError("The CV file could not be read.") from exc
 
     def _render_cv(self, cv: CV, photo: ExtractedImage | None, labels: CVLabels) -> bytes:
         def render(settings: FitSettings) -> bytes:

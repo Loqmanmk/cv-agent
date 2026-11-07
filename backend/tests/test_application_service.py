@@ -194,3 +194,21 @@ def test_an_unsupported_offer_language_stops_after_one_ai_call() -> None:
         service.create(make_request())
 
     assert len(provider.calls) == 1
+
+
+def test_a_file_that_does_not_match_its_extension_is_refused() -> None:
+    service, provider, _ = make_service([])
+
+    with pytest.raises(InvalidApplicationInputError, match="does not match"):
+        service.create(make_request(filename="cv.pdf", content=make_docx()))
+
+    assert provider.calls == []
+
+
+def test_a_corrupted_file_gives_a_clean_error() -> None:
+    service, provider, _ = make_service([])
+
+    with pytest.raises(InvalidApplicationInputError, match="could not be read"):
+        service.create(make_request(content=b"PK-not-a-real-zip"))
+
+    assert provider.calls == []

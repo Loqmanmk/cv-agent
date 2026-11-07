@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Callable
 
@@ -7,6 +8,8 @@ from google.genai import errors, types
 from pydantic import BaseModel, SecretStr, ValidationError
 
 from app.domain.llm import LLMError, LLMProvider, LLMUnavailableError
+
+logger = logging.getLogger(__name__)
 
 TEMPERATURE = 0.2
 MAX_ATTEMPTS = 4
@@ -69,6 +72,7 @@ class GeminiProvider(LLMProvider):
                 )
             except errors.APIError as exc:
                 if exc.code in RETRYABLE_CODES and attempt < MAX_ATTEMPTS:
+                    logger.warning("%s: code %s, retry %s", self._model, exc.code, attempt)
                     self._sleep(BASE_DELAY_SECONDS * 2 ** (attempt - 1))
                     continue
                 raise self._to_llm_error(exc) from exc

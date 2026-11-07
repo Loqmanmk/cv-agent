@@ -1,8 +1,11 @@
+import logging
 from collections.abc import Sequence
 
 from pydantic import BaseModel
 
 from app.domain.llm import LLMProvider, LLMUnavailableError
+
+logger = logging.getLogger(__name__)
 
 
 class FallbackLLMProvider(LLMProvider):
@@ -24,5 +27,6 @@ class FallbackLLMProvider(LLMProvider):
             try:
                 return provider.generate(system_prompt, user_prompt, response_model)
             except LLMUnavailableError as exc:
+                logger.warning("provider unavailable, trying the next one: %s", exc)
                 failures.append(str(exc))
         raise LLMUnavailableError("All providers are unavailable: " + " | ".join(failures))
