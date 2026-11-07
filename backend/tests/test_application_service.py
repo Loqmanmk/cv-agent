@@ -12,6 +12,7 @@ from app.infrastructure.cv_html_builder import CVHtmlBuilder
 from app.infrastructure.docx_parser import DocxParser
 from app.infrastructure.letter_html_builder import LetterHtmlBuilder
 from app.infrastructure.pdf_parser import PdfParser
+from app.infrastructure.photo_sanitizer import PillowPhotoSanitizer
 from app.services.application_service import (
     MAX_CV_BYTES,
     ApplicationRequest,
@@ -65,6 +66,7 @@ def make_service(
         cv_html=CVHtmlBuilder(),
         letter_html=LetterHtmlBuilder(),
         parsers={".docx": DocxParser(), ".pdf": PdfParser()},
+        photo_sanitizer=PillowPhotoSanitizer(),
     )
     return service, provider, converter
 
@@ -212,3 +214,31 @@ def test_a_corrupted_file_gives_a_clean_error() -> None:
         service.create(make_request(content=b"PK-not-a-real-zip"))
 
     assert provider.calls == []
+
+
+def test_a_photo_in_an_unsupported_format_is_skipped_and_not_fatal() -> None:
+    from PIL import Image
+
+    gif = BytesIO()
+    Image.new("RGB", (300, 353), "white").save(gif, format="GIF")
+    document = Document()
+    for line in CV_LINES:
+        document.add_paragraph(line)
+    document.add_picture(BytesIO(gif.getvalue()))
+    buffer = BytesIO()
+    document.save(buffer)
+    service, _, converter = make_service(ai_answers())
+
+    result = service.create(make_request(content=buffer.getvalue()))
+
+    assert result.photo_used is False
+    assert "<img" not in converter.pages[0]
+
+
+def test_the_result_keeps_the_original_cv_next_to_the_tailored_one() -> None:
+    service, _, _ = make_service(ai_answers())
+
+    result = service.create(make_request())
+
+    assert result.original_cv.profile == make_cv().profile
+    assert result.cv.profile == "Rewritten profile."

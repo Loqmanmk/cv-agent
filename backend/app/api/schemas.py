@@ -1,4 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+from app.domain.cv import CV
+from app.domain.job import OfferLanguage
+from app.domain.letter import CoverLetter
 
 
 class ApplicationResponse(BaseModel):
@@ -6,5 +10,23 @@ class ApplicationResponse(BaseModel):
     company: str
     language: str
     photo_used: bool
+    cv_pdf_base64: str
+    letter_pdf_base64: str
+    original_cv: CV
+    cv: CV
+    letter: CoverLetter
+    photo_base64: str | None
+
+
+class RenderRequestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cv: CV
+    letter: CoverLetter
+    language: OfferLanguage
+    photo_base64: str | None = None
+
+
+class RenderResponse(BaseModel):
     cv_pdf_base64: str
     letter_pdf_base64: str

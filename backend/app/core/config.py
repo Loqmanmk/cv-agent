@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     applicant_gender: Literal["m", "f"] = "m"
     cors_origins: str = "http://localhost:3000"
     rate_limit_per_hour: int = 10
+    render_rate_limit_per_hour: int = 60
 
     @property
     def gemini_model_chain(self) -> list[str]:

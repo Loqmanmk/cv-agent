@@ -3,23 +3,27 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import PurePath
-from typing import Protocol
 
 from app.domain.cv import CV
-from app.domain.cv_labels import LABELS_BY_LANGUAGE, CVLabels
-from app.domain.document import DocumentParser, ExtractedImage, ParsedDocument
+from app.domain.document import (
+    DocumentParser,
+    ExtractedImage,
+    InvalidPhotoError,
+    ParsedDocument,
+    PhotoSanitizer,
+)
 from app.domain.job import JobOffer
 from app.domain.letter import CoverLetter, Gender, LetterSender
 from app.domain.llm import LLMProvider
 from app.domain.pdf import PdfConverter, PdfPageCounter
 from app.services.cv_structurer import CVStructurer
 from app.services.cv_tailor import CVTailor
+from app.services.document_renderer import CVHtmlRenderer, DocumentRenderer, LetterHtmlRenderer
 from app.services.job_analyzer import JobAnalyzer
 from app.services.letter_assembler import LetterAssembler
 from app.services.letter_conventions import conventions_for
 from app.services.letter_writer import LetterWriter
 from app.services.masking_llm_provider import MaskingLLMProvider
-from app.services.page_fitter import LADDER, LETTER_LADDER, FitSettings, OnePageFitter
 from app.services.photo_selector import PhotoSelector
 
 logger = logging.getLogger(__name__)
@@ -30,28 +34,6 @@ SIGNATURES = {".docx": b"PK", ".pdf": b"%PDF"}
 
 class InvalidApplicationInputError(Exception):
     """Raised when the uploaded CV file is not acceptable."""
-
-
-class CVHtmlRenderer(Protocol):
-    def build(
-        self,
-        cv: CV,
-        photo: ExtractedImage | None,
-        labels: CVLabels,
-        font_size: float,
-        spacing: float,
-    ) -> str: ...
-
-
-class LetterHtmlRenderer(Protocol):
-    def build(
-        self,
-        letter: CoverLetter,
-        font_size: float,
-        spacing: float,
-        lang: str,
-        direction: str,
-    ) -> str: ...
 
 
 @dataclass(frozen=True)
@@ -69,11 +51,16 @@ class ApplicationRequest:
 @dataclass(frozen=True)
 class ApplicationResult:
     offer: JobOffer
+    original_cv: CV
     cv: CV
     letter: CoverLetter
     cv_pdf: bytes
     letter_pdf: bytes
-    photo_used: bool
+    photo: ExtractedImage | None
+
+    @property
+    def photo_used(self) -> bool:
+        return self.photo is not None
 
 
 class ApplicationService:
@@ -87,14 +74,13 @@ class ApplicationService:
         cv_html: CVHtmlRenderer,
         letter_html: LetterHtmlRenderer,
         parsers: Mapping[str, DocumentParser],
+        photo_sanitizer: PhotoSanitizer,
     ) -> None:
         self._public_llm = llm
         self._private_llm = MaskingLLMProvider(llm)
-        self._converter = converter
-        self._counter = counter
-        self._cv_html = cv_html
-        self._letter_html = letter_html
+        self._renderer = DocumentRenderer(converter, counter, cv_html, letter_html)
         self._parsers = parsers
+        self._photo_sanitizer = photo_sanitizer
 
     def create(self, request: ApplicationRequest) -> ApplicationResult:
         parsed = self._parse(request)
@@ -116,17 +102,30 @@ class ApplicationService:
             gender=request.gender,
         )
         letter = LetterAssembler().assemble(body, offer, sender, request.today)
-        photo = PhotoSelector().select(parsed.images) if request.include_photo else None
+        photo = self._select_photo(parsed.images, request.include_photo)
         logger.info("stage 5/5: rendering the PDFs")
-        labels = LABELS_BY_LANGUAGE[offer.language]
+        documents = self._renderer.render(tailored, letter, photo, offer.language)
         return ApplicationResult(
             offer=offer,
+            original_cv=cv,
             cv=tailored,
             letter=letter,
-            cv_pdf=self._render_cv(tailored, photo, labels),
-            letter_pdf=self._render_letter(letter, labels),
-            photo_used=photo is not None,
+            cv_pdf=documents.cv_pdf,
+            letter_pdf=documents.letter_pdf,
+            photo=photo,
         )
+
+    def _select_photo(self, images: list[ExtractedImage], include: bool) -> ExtractedImage | None:
+        if not include:
+            return None
+        candidate = PhotoSelector().select(images)
+        if candidate is None:
+            return None
+        try:
+            return self._photo_sanitizer.sanitize(candidate.data)
+        except InvalidPhotoError as error:
+            logger.warning("the photo of the CV was skipped: %s", error)
+            return None
 
     def _parse(self, request: ApplicationRequest) -> ParsedDocument:
         extension = PurePath(request.cv_filename).suffix.lower()
@@ -149,19 +148,3 @@ class ApplicationService:
             return parser.parse(content)
         except Exception as exc:  # untrusted file: any parser failure is an input problem
             raise InvalidApplicationInputError("The CV file could not be read.") from exc
-
-    def _render_cv(self, cv: CV, photo: ExtractedImage | None, labels: CVLabels) -> bytes:
-        def render(settings: FitSettings) -> bytes:
-            html = self._cv_html.build(cv, photo, labels, settings.font_size, settings.spacing)
-            return self._converter.to_pdf(html)
-
-        return OnePageFitter(self._counter, LADDER).fit(render).pdf
-
-    def _render_letter(self, letter: CoverLetter, labels: CVLabels) -> bytes:
-        def render(settings: FitSettings) -> bytes:
-            html = self._letter_html.build(
-                letter, settings.font_size, settings.spacing, labels.lang, labels.direction
-            )
-            return self._converter.to_pdf(html)
-
-        return OnePageFitter(self._counter, LETTER_LADDER).fit(render).pdf

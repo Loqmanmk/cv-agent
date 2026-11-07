@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.domain.document import InvalidPhotoError
 from app.domain.llm import LLMError, LLMUnavailableError
 from app.services.application_service import InvalidApplicationInputError
 from app.services.cv_structurer import CVStructuringError
@@ -16,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 INPUT_ERRORS = (
     InvalidApplicationInputError,
+    InvalidPhotoError,
     JobAnalysisError,
     CVStructuringError,
     UnsupportedLetterLanguageError,
