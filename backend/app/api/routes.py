@@ -5,19 +5,24 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.dependencies import (
+    enforce_fetch_rate_limit,
     enforce_rate_limit,
     enforce_render_rate_limit,
     get_application_service,
+    get_job_fetch_service,
     get_render_service,
 )
 from app.api.schemas import (
     ApplicationResponse,
+    JobTextResponse,
+    JobUrlRequest,
     RenderRequestBody,
     RenderResponse,
 )
 from app.core.config import Settings, get_settings
 from app.domain.document import InvalidPhotoError
 from app.services.application_service import MAX_CV_BYTES, ApplicationRequest, ApplicationService
+from app.services.job_fetch_service import JobFetchService
 from app.services.render_service import RenderRequest, RenderService
 
 router = APIRouter()
@@ -104,4 +109,21 @@ def render_documents(
     return RenderResponse(
         cv_pdf_base64=_encode(documents.cv_pdf),
         letter_pdf_base64=_encode(documents.letter_pdf),
+    )
+
+
+@router.post(
+    "/job-offers/fetch",
+    response_model=JobTextResponse,
+    dependencies=[Depends(enforce_fetch_rate_limit)],
+)
+def fetch_job_offer(
+    body: JobUrlRequest,
+    service: Annotated[JobFetchService, Depends(get_job_fetch_service)],
+) -> JobTextResponse:
+    fetched = service.fetch_text(body.url)
+    return JobTextResponse(
+        text=fetched.text,
+        truncated=fetched.truncated,
+        source_url=fetched.source_url,
     )

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.cv import CV
 from app.domain.job import OfferLanguage
@@ -30,3 +30,15 @@ class RenderRequestBody(BaseModel):
 class RenderResponse(BaseModel):
     cv_pdf_base64: str
     letter_pdf_base64: str
+
+
+class JobUrlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(min_length=1, max_length=2000)
+
+
+class JobTextResponse(BaseModel):
+    text: str
+    truncated: bool
+    source_url: str

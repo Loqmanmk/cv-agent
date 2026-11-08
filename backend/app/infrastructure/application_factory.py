@@ -7,8 +7,11 @@ from app.infrastructure.pdf_converter import PlaywrightPdfConverter
 from app.infrastructure.pdf_page_counter import PyMuPdfPageCounter
 from app.infrastructure.pdf_parser import PdfParser
 from app.infrastructure.photo_sanitizer import PillowPhotoSanitizer
+from app.infrastructure.safe_page_fetcher import SafePageFetcher
+from app.infrastructure.trafilatura_extractor import TrafilaturaExtractor
 from app.services.application_service import ApplicationService
 from app.services.document_renderer import DocumentRenderer
+from app.services.job_fetch_service import JobFetchService
 from app.services.render_service import RenderService
 
 
@@ -34,3 +37,8 @@ def build_render_service() -> RenderService:
         LetterHtmlBuilder(),
     )
     return RenderService(renderer, PillowPhotoSanitizer())
+
+
+def build_job_fetch_service() -> JobFetchService:
+    """Fetching a public page needs no AI and no settings."""
+    return JobFetchService(SafePageFetcher(), TrafilaturaExtractor())
