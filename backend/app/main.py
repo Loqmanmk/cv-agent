@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.errors import register_error_handlers
 from app.api.routes import router
+from app.api.security import security_headers_middleware
 from app.api.tracker_routes import router as tracker_router
 from app.core.config import Settings, get_settings
 from app.services.application_service import MAX_CV_BYTES
@@ -28,17 +29,23 @@ async def reject_oversized_requests(
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
-    app = FastAPI(title="CV Agent")
+    # The interactive API documentation is switched off: it would describe the whole API to
+    # anyone, and it needs scripts that the strict security policy blocks.
+    app = FastAPI(title="CV Agent", docs_url=None, redoc_url=None, openapi_url=None)
+    register_error_handlers(app)
+    app.include_router(router)
+    app.include_router(tracker_router)
+    # The last middleware added is the outermost one: CORS wraps everything, so even a
+    # rejected upload carries the CORS headers that let the browser read the error.
+    # Order, from the inside to the outside: size check, security headers, CORS.
+    app.middleware("http")(reject_oversized_requests)
+    app.middleware("http")(security_headers_middleware(settings.hsts_enabled))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
         allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
-    app.middleware("http")(reject_oversized_requests)
-    register_error_handlers(app)
-    app.include_router(router)
-    app.include_router(tracker_router)
     return app
 
 
