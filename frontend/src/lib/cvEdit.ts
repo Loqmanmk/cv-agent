@@ -90,5 +90,32 @@ export function buildEditedCv(cv: Cv, drafts: SkillDraft[]): Cv {
 }
 
 export function buildEditedLetter(letter: CoverLetter): CoverLetter {
-  return { ...letter, paragraphs: withoutEmpty(letter.paragraphs) };
+  return {
+    ...letter,
+    subject: letter.subject.trim(),
+    recipient: {
+      contact: letter.recipient.contact.trim(),
+      company: letter.recipient.company.trim(),
+      address: letter.recipient.address.trim(),
+    },
+    paragraphs: withoutEmpty(letter.paragraphs),
+  };
+}
+
+export type RecipientField = "contact" | "company" | "address";
+
+export function setLetterSubject(letter: CoverLetter, value: string): CoverLetter {
+  return { ...letter, subject: value };
+}
+
+export function setRecipientField(
+  letter: CoverLetter,
+  field: RecipientField,
+  value: string,
+): CoverLetter {
+  return { ...letter, recipient: { ...letter.recipient, [field]: value } };
+}
+
+export function findLetterProblems(letter: CoverLetter): string[] {
+  return letter.subject.trim() === "" ? ["The letter needs a subject line."] : [];
 }

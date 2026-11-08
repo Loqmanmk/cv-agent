@@ -2,16 +2,20 @@
 
 import { useState, type ReactNode } from "react";
 
+import { LetterHeaderEditor } from "@/components/LetterHeaderEditor";
 import type { ApplicationResult } from "@/lib/api";
 import {
   buildEditedCv,
   buildEditedLetter,
+  findLetterProblems,
   findProblems,
   setExperienceBullet,
   setHeaderField,
   setLetterParagraph,
+  setLetterSubject,
   setProfile,
   setProjectBullet,
+  setRecipientField,
   toSkillDrafts,
   type SkillDraft,
 } from "@/lib/cvEdit";
@@ -73,7 +77,7 @@ export function ReviewEditor({ result, busy, error, onRegenerate }: Props) {
   const [letter, setLetter] = useState<CoverLetter>(result.letter);
   const [drafts, setDrafts] = useState<SkillDraft[]>(() => toSkillDrafts(result.cv.skills));
   const [includePhoto, setIncludePhoto] = useState(true);
-  const problems = findProblems(drafts);
+  const problems = [...findProblems(drafts), ...findLetterProblems(letter)];
   const original = result.originalCv;
   const editableParagraphs = letter.paragraphs.slice(0, -1);
   const closing = letter.paragraphs.at(-1);
@@ -268,6 +272,13 @@ export function ReviewEditor({ result, busy, error, onRegenerate }: Props) {
       </Row>
 
       <h3 className="mt-6 font-semibold">Cover letter</h3>
+      <LetterHeaderEditor
+        letter={letter}
+        onSubjectChange={(value) => setLetter((current) => setLetterSubject(current, value))}
+        onRecipientChange={(field, value) =>
+          setLetter((current) => setRecipientField(current, field, value))
+        }
+      />
       <div className="mt-2 space-y-3">
         {editableParagraphs.map((paragraph, index) => (
           <div key={index}>
