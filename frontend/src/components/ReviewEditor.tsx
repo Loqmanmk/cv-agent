@@ -33,6 +33,10 @@ type Props = {
   busy: boolean;
   error: string | null;
   onRegenerate: (edited: EditedDocuments) => void;
+  onSave?: (edited: EditedDocuments) => void;
+  saving?: boolean;
+  saveMessage?: string | null;
+  saveError?: string | null;
 };
 
 const FIELD = "mt-1 block w-full rounded border border-gray-300 p-2 text-sm";
@@ -72,7 +76,16 @@ function Row({ original, children }: { original: ReactNode; children: ReactNode 
   );
 }
 
-export function ReviewEditor({ result, busy, error, onRegenerate }: Props) {
+export function ReviewEditor({
+  result,
+  busy,
+  error,
+  onRegenerate,
+  onSave,
+  saving = false,
+  saveMessage = null,
+  saveError = null,
+}: Props) {
   const [cv, setCv] = useState<Cv>(result.cv);
   const [letter, setLetter] = useState<CoverLetter>(result.letter);
   const [drafts, setDrafts] = useState<SkillDraft[]>(() => toSkillDrafts(result.cv.skills));
@@ -82,12 +95,20 @@ export function ReviewEditor({ result, busy, error, onRegenerate }: Props) {
   const editableParagraphs = letter.paragraphs.slice(0, -1);
   const closing = letter.paragraphs.at(-1);
 
-  function handleRegenerate() {
-    onRegenerate({
+  function currentEdits(): EditedDocuments {
+    return {
       cv: buildEditedCv(cv, drafts),
       letter: buildEditedLetter(letter),
       photoBase64: includePhoto ? result.photoBase64 : null,
-    });
+    };
+  }
+
+  function handleRegenerate() {
+    onRegenerate(currentEdits());
+  }
+
+  function handleSave() {
+    onSave?.(currentEdits());
   }
 
   return (
@@ -323,6 +344,32 @@ export function ReviewEditor({ result, busy, error, onRegenerate }: Props) {
       >
         {busy ? "Regenerating…" : "Regenerate PDFs"}
       </button>
+
+      {onSave && (
+        <div className="mt-6 border-t pt-4">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving || problems.length > 0}
+            className="rounded border border-gray-400 px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save to my applications"}
+          </button>
+          <p className="mt-1 text-xs text-gray-500">
+            Saves the text as you see it here, with both PDFs. Each click adds a new entry.
+          </p>
+          {saveMessage && (
+            <p role="status" className="mt-2 text-sm text-green-700">
+              {saveMessage}
+            </p>
+          )}
+          {saveError && (
+            <p role="alert" className="mt-2 text-sm text-red-700">
+              {saveError}
+            </p>
+          )}
+        </div>
+      )}
     </section>
   );
 }

@@ -78,7 +78,7 @@ type JobTextBody = {
 
 type ErrorBody = { detail?: unknown; violations?: unknown };
 
-function apiBaseUrl(): string {
+export function apiBaseUrl(): string {
   return (process.env.NEXT_PUBLIC_API_URL ?? DEFAULT_API_URL).replace(/\/+$/, "");
 }
 
@@ -162,10 +162,14 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 }
 
-async function post(path: string, init: RequestInit, signal?: AbortSignal): Promise<unknown> {
+export async function post(
+  path: string,
+  init: RequestInit,
+  signal?: AbortSignal,
+): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl()}${path}`, { ...init, method: "POST", signal });
+    response = await fetch(`${apiBaseUrl()}${path}`, { method: "POST", ...init, signal });
   } catch (error) {
     if (isAbortError(error)) throw error;
     throw new ApiError("Cannot reach the server. Check that the backend is running.", 0);

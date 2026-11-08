@@ -6,10 +6,12 @@ import { ApplicationForm, type ApplicationFormValues } from "@/components/Applic
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import { ApiError, createApplication, renderDocuments, type ApplicationResult } from "@/lib/api";
 import { base64ToPdfBlob, fileSlug } from "@/lib/pdf";
+import { saveApplication } from "@/lib/trackerApi";
 
 const CREATE_TIMEOUT_MS = 420_000;
 const RENDER_TIMEOUT_MS = 120_000;
 const TIMEOUT_MESSAGE = "The request took too long. Please try again.";
+const FALLBACK_TITLE = "Application";
 const LANGUAGE_NAMES: Record<string, string> = {
   fr: "French",
   en: "English",
@@ -30,6 +32,12 @@ type DoneState = {
 
 type State =
   { phase: "idle" } | { phase: "loading" } | { phase: "error"; error: ApiError } | DoneState;
+
+type SaveState =
+  | { phase: "idle" }
+  | { phase: "saving" }
+  | { phase: "saved"; id: number }
+  | { phase: "error"; message: string };
 
 function ElapsedSeconds() {
   const [seconds, setSeconds] = useState(0);
@@ -72,6 +80,7 @@ function beginRequest(timeoutMs: number) {
 
 export function ApplicationPanel() {
   const [state, setState] = useState<State>({ phase: "idle" });
+  const [save, setSave] = useState<SaveState>({ phase: "idle" });
   const controllerRef = useRef<AbortController | null>(null);
   const cvUrl = state.phase === "done" ? state.cvUrl : null;
   const letterUrl = state.phase === "done" ? state.letterUrl : null;
@@ -91,6 +100,7 @@ export function ApplicationPanel() {
     const request = beginRequest(CREATE_TIMEOUT_MS);
     controllerRef.current = request.controller;
 
+    setSave({ phase: "idle" });
     setState({ phase: "loading" });
     try {
       const result = await createApplication(values, request.controller.signal);
@@ -149,6 +159,26 @@ export function ApplicationPanel() {
       setState({ ...current, regenerating: false, regenerateError: message });
     } finally {
       request.finish();
+    }
+  }
+
+  async function handleSave(edited: EditedDocuments) {
+    if (state.phase !== "done") return;
+    const { result } = state;
+    setSave({ phase: "saving" });
+    try {
+      const saved = await saveApplication({
+        jobTitle: result.jobTitle.trim() || FALLBACK_TITLE,
+        company: edited.letter.recipient.company || result.company,
+        language: result.language,
+        sourceUrl: "",
+        cv: edited.cv,
+        letter: edited.letter,
+        photoBase64: edited.photoBase64,
+      });
+      setSave({ phase: "saved", id: saved.id });
+    } catch (error) {
+      setSave({ phase: "error", message: toApiError(error).message });
     }
   }
 
@@ -220,7 +250,10 @@ export function ApplicationPanel() {
             </p>
             <button
               type="button"
-              onClick={() => setState({ phase: "idle" })}
+              onClick={() => {
+                setSave({ phase: "idle" });
+                setState({ phase: "idle" });
+              }}
               className="mt-3 text-sm underline"
             >
               Start again
@@ -232,6 +265,14 @@ export function ApplicationPanel() {
             busy={state.regenerating}
             error={state.regenerateError}
             onRegenerate={(edited) => void handleRegenerate(edited)}
+            onSave={(edited) => void handleSave(edited)}
+            saving={save.phase === "saving"}
+            saveMessage={
+              save.phase === "saved"
+                ? `Saved as application #${save.id}. Follow it in "My applications".`
+                : null
+            }
+            saveError={save.phase === "error" ? save.message : null}
           />
         </>
       )}
