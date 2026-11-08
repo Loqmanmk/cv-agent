@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from app.domain.document import InvalidPhotoError
 from app.domain.job_source import JobFetchError
 from app.domain.llm import LLMError, LLMUnavailableError
+from app.domain.tracker import ApplicationNotFoundError, InvalidTrackerInputError
 from app.services.application_service import InvalidApplicationInputError
 from app.services.cv_structurer import CVStructuringError
 from app.services.job_analyzer import JobAnalysisError
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 INPUT_ERRORS = (
     InvalidApplicationInputError,
     InvalidPhotoError,
+    InvalidTrackerInputError,
     JobAnalysisError,
     JobFetchError,
     CVStructuringError,
@@ -30,6 +32,10 @@ INPUT_ERRORS = (
 
 def _unprocessable(_request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
+def _not_found(_request: Request, _exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": "Application not found."})
 
 
 def _unavailable(_request: Request, exc: Exception) -> JSONResponse:
@@ -53,6 +59,7 @@ def _unfaithful(_request: Request, exc: Exception) -> JSONResponse:
 def register_error_handlers(app: FastAPI) -> None:
     for error_type in INPUT_ERRORS:
         app.add_exception_handler(error_type, _unprocessable)
+    app.add_exception_handler(ApplicationNotFoundError, _not_found)
     app.add_exception_handler(LLMUnavailableError, _unavailable)
     app.add_exception_handler(LLMError, _bad_gateway)
     app.add_exception_handler(TailoringViolationError, _unfaithful)

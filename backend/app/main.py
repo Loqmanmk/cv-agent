@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.errors import register_error_handlers
 from app.api.routes import router
+from app.api.tracker_routes import router as tracker_router
 from app.core.config import Settings, get_settings
 from app.services.application_service import MAX_CV_BYTES
 
@@ -31,12 +32,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
     )
     app.middleware("http")(reject_oversized_requests)
     register_error_handlers(app)
     app.include_router(router)
+    app.include_router(tracker_router)
     return app
 
 
