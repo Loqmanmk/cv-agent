@@ -31,6 +31,12 @@ export type RenderedDocuments = {
   letterPdfBase64: string;
 };
 
+export type FetchedJobText = {
+  text: string;
+  truncated: boolean;
+  sourceUrl: string;
+};
+
 export class ApiError extends Error {
   readonly status: number;
   readonly violations: string[];
@@ -62,6 +68,12 @@ type ResultBody = {
 type RenderBody = {
   cv_pdf_base64: string;
   letter_pdf_base64: string;
+};
+
+type JobTextBody = {
+  text: string;
+  truncated: boolean;
+  source_url: string;
 };
 
 type ErrorBody = { detail?: unknown; violations?: unknown };
@@ -99,6 +111,15 @@ function isRenderBody(body: unknown): body is RenderBody {
     isObject(body) &&
     typeof body.cv_pdf_base64 === "string" &&
     typeof body.letter_pdf_base64 === "string"
+  );
+}
+
+function isJobTextBody(body: unknown): body is JobTextBody {
+  return (
+    isObject(body) &&
+    typeof body.text === "string" &&
+    typeof body.truncated === "boolean" &&
+    typeof body.source_url === "string"
   );
 }
 
@@ -201,4 +222,19 @@ export async function renderDocuments(
     throw new ApiError("The server sent an unexpected answer.", 200);
   }
   return { cvPdfBase64: data.cv_pdf_base64, letterPdfBase64: data.letter_pdf_base64 };
+}
+
+export async function fetchJobText(url: string, signal?: AbortSignal): Promise<FetchedJobText> {
+  const data = await post(
+    "/job-offers/fetch",
+    {
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    },
+    signal,
+  );
+  if (!isJobTextBody(data)) {
+    throw new ApiError("The server sent an unexpected answer.", 200);
+  }
+  return { text: data.text, truncated: data.truncated, sourceUrl: data.source_url };
 }
