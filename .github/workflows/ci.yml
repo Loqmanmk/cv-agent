@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "0 6 * * 1"
 
 permissions:
   contents: read
@@ -19,6 +21,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: uv sync --frozen
+      - name: Audit dependencies
+        run: uv run pip-audit
       - name: Lint
         run: uv run ruff check .
       - name: Check formatting
@@ -45,6 +49,10 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level moderate
+      - name: Audit development tools
+        run: pnpm audit --audit-level high
       - name: Check formatting
         run: pnpm format:check
       - name: Lint
