@@ -1,5 +1,6 @@
 import re
 import unicodedata
+import uuid
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
@@ -67,7 +68,7 @@ def _safe_source_url(value: str) -> str:
 
 
 class TrackerService:
-    """Saves the applications of the user and follows their status."""
+    """Saves the applications of a user and follows their status."""
 
     def __init__(
         self,
@@ -79,7 +80,7 @@ class TrackerService:
         self._renderer = renderer
         self._sanitizer = sanitizer
 
-    def save(self, request: SaveRequest) -> ApplicationSummary:
+    def save(self, user_id: uuid.UUID, request: SaveRequest) -> ApplicationSummary:
         title = _one_line(request.job_title, MAX_TITLE_CHARS, "job title", required=True)
         company = _one_line(request.company, MAX_COMPANY_CHARS, "company name")
         photo = self._sanitizer.sanitize(request.photo_bytes).data if request.photo_bytes else None
@@ -87,6 +88,7 @@ class TrackerService:
             RenderRequest(request.cv, request.letter, request.language, photo)
         )
         return self._repository.add(
+            user_id,
             NewApplication(
                 job_title=title,
                 company=company,
@@ -98,17 +100,18 @@ class TrackerService:
                 photo=photo,
                 cv_pdf=documents.cv_pdf,
                 letter_pdf=documents.letter_pdf,
-            )
+            ),
         )
 
-    def list_applications(self) -> list[ApplicationSummary]:
-        return self._repository.list_all()
+    def list_applications(self, user_id: uuid.UUID) -> list[ApplicationSummary]:
+        return self._repository.list_all(user_id)
 
-    def get(self, application_id: int) -> ApplicationSummary:
-        return self._repository.get(application_id)
+    def get(self, user_id: uuid.UUID, application_id: int) -> ApplicationSummary:
+        return self._repository.get(user_id, application_id)
 
     def update(
         self,
+        user_id: uuid.UUID,
         application_id: int,
         status: str | None = None,
         notes: str | None = None,
@@ -121,10 +124,10 @@ class TrackerService:
                 f"The notes are too long ({MAX_NOTES_CHARS} characters)."
             )
         valid_status = status if status is not None and is_status(status) else None
-        return self._repository.update(application_id, valid_status, clean_notes)
+        return self._repository.update(user_id, application_id, valid_status, clean_notes)
 
-    def delete(self, application_id: int) -> None:
-        self._repository.delete(application_id)
+    def delete(self, user_id: uuid.UUID, application_id: int) -> None:
+        self._repository.delete(user_id, application_id)
 
-    def files(self, application_id: int) -> ApplicationFiles:
-        return self._repository.files(application_id)
+    def files(self, user_id: uuid.UUID, application_id: int) -> ApplicationFiles:
+        return self._repository.files(user_id, application_id)

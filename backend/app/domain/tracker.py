@@ -1,3 +1,4 @@
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -12,7 +13,7 @@ def is_status(value: str) -> TypeGuard[ApplicationStatus]:
 
 
 class ApplicationNotFoundError(Exception):
-    """Raised when a saved application does not exist."""
+    """Raised when an application does not exist, or does not belong to the user."""
 
 
 class InvalidTrackerInputError(Exception):
@@ -52,28 +53,29 @@ class ApplicationFiles:
 
 
 class ApplicationRepository(ABC):
-    """Contract for anything that can store the applications of the user."""
+    """Contract for anything that stores applications. Every call is limited to one user."""
 
     @abstractmethod
-    def add(self, application: NewApplication) -> ApplicationSummary: ...
+    def add(self, user_id: uuid.UUID, application: NewApplication) -> ApplicationSummary: ...
 
     @abstractmethod
-    def list_all(self) -> list[ApplicationSummary]:
-        """Return every application, the newest first."""
+    def list_all(self, user_id: uuid.UUID) -> list[ApplicationSummary]:
+        """Return the applications of the user, the newest first."""
 
     @abstractmethod
-    def get(self, application_id: int) -> ApplicationSummary: ...
+    def get(self, user_id: uuid.UUID, application_id: int) -> ApplicationSummary: ...
 
     @abstractmethod
     def update(
         self,
+        user_id: uuid.UUID,
         application_id: int,
         status: ApplicationStatus | None,
         notes: str | None,
     ) -> ApplicationSummary: ...
 
     @abstractmethod
-    def delete(self, application_id: int) -> None: ...
+    def delete(self, user_id: uuid.UUID, application_id: int) -> None: ...
 
     @abstractmethod
-    def files(self, application_id: int) -> ApplicationFiles: ...
+    def files(self, user_id: uuid.UUID, application_id: int) -> ApplicationFiles: ...

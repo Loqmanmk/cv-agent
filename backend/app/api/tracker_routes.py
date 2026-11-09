@@ -1,10 +1,11 @@
 import base64
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Response
 
 from app.api.dependencies import enforce_render_rate_limit
-from app.api.tracker_dependencies import get_tracker_service
+from app.api.tracker_dependencies import get_current_user_id, get_tracker_service
 from app.api.tracker_schemas import (
     ApplicationSummaryOut,
     SaveApplicationBody,
@@ -18,6 +19,7 @@ router = APIRouter(prefix="/tracker")
 
 ApplicationId = Annotated[int, Path(ge=1)]
 Service = Annotated[TrackerService, Depends(get_tracker_service)]
+CurrentUser = Annotated[uuid.UUID, Depends(get_current_user_id)]
 
 
 def _decode_photo(value: str | None) -> bytes | None:
@@ -53,8 +55,11 @@ def _pdf(content: bytes, filename: str) -> Response:
     response_model=ApplicationSummaryOut,
     dependencies=[Depends(enforce_render_rate_limit)],
 )
-def save_application(body: SaveApplicationBody, service: Service) -> ApplicationSummaryOut:
+def save_application(
+    body: SaveApplicationBody, service: Service, user_id: CurrentUser
+) -> ApplicationSummaryOut:
     summary = service.save(
+        user_id,
         SaveRequest(
             job_title=body.job_title,
             company=body.company,
@@ -64,19 +69,21 @@ def save_application(body: SaveApplicationBody, service: Service) -> Application
             cv=body.cv,
             letter=body.letter,
             photo_bytes=_decode_photo(body.photo_base64),
-        )
+        ),
     )
     return _out(summary)
 
 
 @router.get("/applications", response_model=list[ApplicationSummaryOut])
-def list_applications(service: Service) -> list[ApplicationSummaryOut]:
-    return [_out(summary) for summary in service.list_applications()]
+def list_applications(service: Service, user_id: CurrentUser) -> list[ApplicationSummaryOut]:
+    return [_out(summary) for summary in service.list_applications(user_id)]
 
 
 @router.get("/applications/{application_id}", response_model=ApplicationSummaryOut)
-def get_application(application_id: ApplicationId, service: Service) -> ApplicationSummaryOut:
-    return _out(service.get(application_id))
+def get_application(
+    application_id: ApplicationId, service: Service, user_id: CurrentUser
+) -> ApplicationSummaryOut:
+    return _out(service.get(user_id, application_id))
 
 
 @router.patch("/applications/{application_id}", response_model=ApplicationSummaryOut)
@@ -84,23 +91,29 @@ def update_application(
     application_id: ApplicationId,
     body: UpdateApplicationBody,
     service: Service,
+    user_id: CurrentUser,
 ) -> ApplicationSummaryOut:
-    return _out(service.update(application_id, body.status, body.notes))
+    return _out(service.update(user_id, application_id, body.status, body.notes))
 
 
 @router.delete("/applications/{application_id}", status_code=204)
-def delete_application(application_id: ApplicationId, service: Service) -> Response:
-    service.delete(application_id)
+def delete_application(
+    application_id: ApplicationId, service: Service, user_id: CurrentUser
+) -> Response:
+    service.delete(user_id, application_id)
     return Response(status_code=204)
 
 
 @router.get("/applications/{application_id}/cv.pdf")
-def download_cv(application_id: ApplicationId, service: Service) -> Response:
-    summary = service.get(application_id)
-    return _pdf(service.files(application_id).cv_pdf, pdf_filename("cv", summary.company))
+def download_cv(application_id: ApplicationId, service: Service, user_id: CurrentUser) -> Response:
+    summary = service.get(user_id, application_id)
+    return _pdf(service.files(user_id, application_id).cv_pdf, pdf_filename("cv", summary.company))
 
 
 @router.get("/applications/{application_id}/letter.pdf")
-def download_letter(application_id: ApplicationId, service: Service) -> Response:
-    summary = service.get(application_id)
-    return _pdf(service.files(application_id).letter_pdf, pdf_filename("letter", summary.company))
+def download_letter(
+    application_id: ApplicationId, service: Service, user_id: CurrentUser
+) -> Response:
+    summary = service.get(user_id, application_id)
+    filename = pdf_filename("letter", summary.company)
+    return _pdf(service.files(user_id, application_id).letter_pdf, filename)

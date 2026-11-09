@@ -2,6 +2,7 @@ import logging
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import OperationalError
 
 from app.domain.document import InvalidPhotoError
 from app.domain.job_source import JobFetchError
@@ -56,10 +57,17 @@ def _unfaithful(_request: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(status_code=502, content={"detail": detail, "violations": violations})
 
 
+def _database_unavailable(_request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Database unavailable: %s", type(exc).__name__)
+    detail = "The database is unavailable. Please try again later."
+    return JSONResponse(status_code=503, content={"detail": detail})
+
+
 def register_error_handlers(app: FastAPI) -> None:
     for error_type in INPUT_ERRORS:
         app.add_exception_handler(error_type, _unprocessable)
     app.add_exception_handler(ApplicationNotFoundError, _not_found)
+    app.add_exception_handler(OperationalError, _database_unavailable)
     app.add_exception_handler(LLMUnavailableError, _unavailable)
     app.add_exception_handler(LLMError, _bad_gateway)
     app.add_exception_handler(TailoringViolationError, _unfaithful)

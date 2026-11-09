@@ -25,7 +25,6 @@ class Settings(BaseSettings):
     rate_limit_per_hour: int = 10
     render_rate_limit_per_hour: int = 60
     fetch_rate_limit_per_hour: int = 30
-    tracker_db_path: str = "../data/tracker.db"
     hsts_enabled: bool = False
     database_url: SecretStr | None = None
 
