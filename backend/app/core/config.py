@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     fetch_rate_limit_per_hour: int = 30
     tracker_db_path: str = "../data/tracker.db"
     hsts_enabled: bool = False
+    database_url: SecretStr | None = None
 
     @property
     def gemini_model_chain(self) -> list[str]:
