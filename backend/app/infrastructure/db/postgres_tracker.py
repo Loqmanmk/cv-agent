@@ -1,8 +1,9 @@
 import json
 import uuid
-from typing import Any
+from datetime import datetime
+from typing import Any, Protocol
 
-from sqlalchemy import Engine, Row, delete, insert, select, update
+from sqlalchemy import Engine, delete, insert, select, update
 from sqlalchemy.orm import sessionmaker
 
 from app.domain.tracker import (
@@ -28,7 +29,20 @@ SUMMARY_COLUMNS = (
 )
 
 
-def _summary(row: Row[Any]) -> ApplicationSummary:
+class SummaryRow(Protocol):
+    """What a database row must offer to become a summary (read by column name)."""
+
+    id: int
+    created_at: datetime
+    job_title: str
+    company: str
+    language: str
+    source_url: str
+    status: str
+    notes: str
+
+
+def _summary(row: SummaryRow) -> ApplicationSummary:
     status = str(row.status)
     if not is_status(status):
         raise ValueError(f"Unknown status in the database: {status}")
