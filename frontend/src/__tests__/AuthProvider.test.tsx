@@ -75,7 +75,7 @@ async function expectStatus(expected: string) {
   await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent(expected));
 }
 
-const SESSION = { email: "jane@example.com", csrf_token: "tok" };
+const SESSION = { email: "jane@example.com", csrf_token: "tok", email_verified: true };
 
 beforeEach(() => {
   fetchMock.mockReset();
@@ -125,7 +125,8 @@ describe("AuthProvider", () => {
   it("logs in with the email and the password and keeps the CSRF token", async () => {
     route({
       "GET /auth/me": () => jsonResponse({ detail: "Please log in." }, 401),
-      "POST /auth/login": () => jsonResponse({ email: "jane@example.com", csrf_token: "tok2" }),
+      "POST /auth/login": () =>
+        jsonResponse({ email: "jane@example.com", csrf_token: "tok2", email_verified: true }),
     });
     const user = userEvent.setup();
     renderProbe();

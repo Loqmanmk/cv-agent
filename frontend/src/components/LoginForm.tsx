@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
@@ -89,7 +90,17 @@ export function LoginForm() {
       >
         {submitting ? "Logging in…" : "Log in"}
       </button>
-      <p className="text-xs text-gray-500">Accounts are created by invitation for now.</p>
+      <p className="text-sm">
+        <Link href="/forgot-password" className="underline">
+          Forgot your password?
+        </Link>
+      </p>
+      <p className="text-sm text-gray-600">
+        No account yet?{" "}
+        <Link href="/register" className="underline">
+          Create one
+        </Link>
+      </p>
     </form>
   );
 }

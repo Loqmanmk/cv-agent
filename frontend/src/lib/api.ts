@@ -127,7 +127,12 @@ function isJobTextBody(body: unknown): body is JobTextBody {
 async function readErrorBody(response: Response): Promise<ErrorBody> {
   try {
     const body: unknown = await response.json();
-    return isObject(body) ? body : {};
+    if (!isObject(body)) return {};
+    // A refused password lists its "problems": they are shown like the other details.
+    if (body.violations === undefined && body.problems !== undefined) {
+      return { ...body, violations: body.problems };
+    }
+    return body;
   } catch {
     return {};
   }
@@ -150,6 +155,7 @@ async function toApiError(response: Response): Promise<ApiError> {
     : [];
 
   switch (response.status) {
+    case 400:
     case 401:
     case 403:
       return new ApiError(detail, response.status);
