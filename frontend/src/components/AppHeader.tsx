@@ -20,6 +20,9 @@ export function AppHeader() {
           <Link href="/applications" className="underline">
             My applications
           </Link>
+          <Link href="/profile" className="underline">
+            Profile
+          </Link>
         </div>
         <div className="flex items-center gap-3">
           <span className="text-gray-600">{email}</span>

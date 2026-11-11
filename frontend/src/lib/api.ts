@@ -157,6 +157,7 @@ async function toApiError(response: Response): Promise<ApiError> {
       return new ApiError("The upload is too large.", 413);
     case 429:
       return new ApiError(retryMessage(response), 429);
+    case 402:
     case 422:
     case 502:
     case 503:

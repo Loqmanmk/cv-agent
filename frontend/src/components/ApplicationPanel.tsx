@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { ApplicationForm, type ApplicationFormValues } from "@/components/ApplicationForm";
+import { ErrorHint } from "@/components/ErrorHint";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import { ApiError, createApplication, renderDocuments, type ApplicationResult } from "@/lib/api";
 import { base64ToPdfBlob, fileSlug } from "@/lib/pdf";
@@ -78,7 +79,9 @@ function beginRequest(timeoutMs: number) {
   };
 }
 
-export function ApplicationPanel() {
+type Props = { onCreated?: () => void };
+
+export function ApplicationPanel({ onCreated }: Props = {}) {
   const [state, setState] = useState<State>({ phase: "idle" });
   const [save, setSave] = useState<SaveState>({ phase: "idle" });
   const controllerRef = useRef<AbortController | null>(null);
@@ -114,6 +117,7 @@ export function ApplicationPanel() {
         regenerateError: null,
         edits: 0,
       });
+      onCreated?.();
     } catch (error) {
       if (isAbortError(error)) {
         if (request.timedOut()) {
@@ -198,6 +202,7 @@ export function ApplicationPanel() {
       {state.phase === "error" && (
         <div role="alert" className="mt-6 rounded bg-red-50 p-3 text-sm text-red-800">
           <p>{state.error.message}</p>
+          <ErrorHint error={state.error} />
           {state.error.violations.length > 0 && (
             <ul className="mt-2 list-disc pl-5">
               {state.error.violations.map((violation, index) => (
