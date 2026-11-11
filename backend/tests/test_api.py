@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.api.account_dependencies import get_profile_service, get_quota_service
-from app.api.auth_dependencies import require_user
+from app.api.auth_dependencies import require_user, require_verified_user
 from app.api.dependencies import get_application_service, get_rate_limiter
 from app.api.rate_limit import RateLimiter
 from app.core.config import Settings, get_settings
@@ -92,6 +92,7 @@ def make_client(
     app.dependency_overrides[get_application_service] = lambda: service
     app.dependency_overrides[get_rate_limiter] = lambda: limiter
     app.dependency_overrides[require_user] = lambda: FAKE_SESSION
+    app.dependency_overrides[require_verified_user] = lambda: FAKE_SESSION
     app.dependency_overrides[get_profile_service] = lambda: profile_service
     app.dependency_overrides[get_quota_service] = lambda: quota_service
     app.dependency_overrides[get_settings] = lambda: settings

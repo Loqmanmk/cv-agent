@@ -68,4 +68,8 @@ class UserRepository(ABC):
     def find_by_id(self, user_id: uuid.UUID) -> Account | None: ...
 
     @abstractmethod
+    def mark_email_verified(self, user_id: uuid.UUID) -> None:
+        """Record that the owner controls the address. Keeps the first date."""
+
+    @abstractmethod
     def update_password_hash(self, user_id: uuid.UUID, password_hash: str) -> None: ...

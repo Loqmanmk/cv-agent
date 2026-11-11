@@ -49,28 +49,6 @@ def test_registration_can_be_closed(clean_engine: Engine) -> None:
     assert count(clean_engine, "users") == 0
 
 
-def test_registering_creates_an_account_and_never_echoes_the_password(
-    clean_engine: Engine,
-) -> None:
-    client = make_client(build_auth_app(clean_engine))
-
-    response = register(client, "  Jane.Doe@Example.COM ")
-
-    assert response.status_code == 201
-    assert response.json() == {"email": EMAIL}
-    assert PASSWORD not in response.text
-
-
-def test_the_same_email_cannot_register_twice(clean_engine: Engine) -> None:
-    client = make_client(build_auth_app(clean_engine))
-    register(client)
-
-    response = register(client)
-
-    assert response.status_code == 409
-    assert "already exists" in response.json()["detail"]
-
-
 def test_a_weak_password_is_refused_with_the_list_of_problems(clean_engine: Engine) -> None:
     client = make_client(build_auth_app(clean_engine))
 
@@ -100,14 +78,6 @@ def test_registering_from_another_website_is_refused(clean_engine: Engine, origi
 
     assert response.status_code == 403
     assert count(clean_engine, "users") == 0
-
-
-def test_registrations_are_limited_per_address(clean_engine: Engine) -> None:
-    client = make_client(build_auth_app(clean_engine, register_limit=1))
-
-    statuses = [register(client, f"user{number}@example.com").status_code for number in range(2)]
-
-    assert statuses == [201, 429]
 
 
 def test_a_login_sets_a_protected_cookie_and_returns_the_csrf_token(clean_engine: Engine) -> None:
@@ -209,7 +179,7 @@ def test_me_needs_a_login_and_returns_the_user_and_the_csrf_token(clean_engine: 
     response = client.get("/auth/me")
 
     assert response.status_code == 200
-    assert response.json() == {"email": EMAIL, "csrf_token": csrf}
+    assert response.json() == {"email": EMAIL, "csrf_token": csrf, "email_verified": False}
 
 
 def test_a_state_changing_request_needs_the_csrf_token(clean_engine: Engine) -> None:

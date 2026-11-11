@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Protocol
 
-from sqlalchemy import Engine, select, update
+from sqlalchemy import Engine, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
@@ -72,6 +72,15 @@ class PostgresUserRepository(UserRepository):
         with self._sessions.begin() as session:
             row: AccountRow | None = session.execute(statement).one_or_none()
         return None if row is None else _account(row)
+
+    def mark_email_verified(self, user_id: uuid.UUID) -> None:
+        statement = (
+            update(User)
+            .where(User.id == user_id, User.email_verified_at.is_(None))
+            .values(email_verified_at=func.now())
+        )
+        with self._sessions.begin() as session:
+            session.execute(statement)
 
     def update_password_hash(self, user_id: uuid.UUID, password_hash: str) -> None:
         statement = update(User).where(User.id == user_id).values(password_hash=password_hash)

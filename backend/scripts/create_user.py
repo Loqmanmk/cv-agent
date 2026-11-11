@@ -32,7 +32,8 @@ def main(email: str) -> None:
         sys.exit("Weak password: " + " ".join(error.problems))
     except EmailAlreadyRegisteredError:
         sys.exit("An account with this email already exists.")
-    print(f"Account created for {account.email}")
+    service.mark_email_verified(account.id)
+    print(f"Account created and verified for {account.email}")
 
 
 if __name__ == "__main__":

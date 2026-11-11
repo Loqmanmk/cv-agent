@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
 from app.api.account_dependencies import get_profile_service, get_quota_service
-from app.api.auth_dependencies import CurrentUserId, require_user
+from app.api.auth_dependencies import CurrentUserId, require_user, require_verified_user
 from app.api.dependencies import (
     enforce_fetch_rate_limit,
     enforce_rate_limit,
@@ -52,7 +52,7 @@ def health() -> dict[str, str]:
 @router.post(
     "/applications",
     response_model=ApplicationResponse,
-    dependencies=[Depends(require_user), Depends(enforce_rate_limit)],
+    dependencies=[Depends(require_verified_user), Depends(enforce_rate_limit)],
 )
 def create_application(
     cv_file: Annotated[UploadFile, File()],

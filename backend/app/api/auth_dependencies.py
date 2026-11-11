@@ -1,6 +1,7 @@
 import math
 import uuid
 from functools import lru_cache
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -10,10 +11,15 @@ from app.api.database import get_engine
 from app.api.login_throttle import LoginThrottle
 from app.api.rate_limit import RateLimiter
 from app.core.config import Settings, get_settings
+from app.domain.mail import EmailSender
 from app.infrastructure.argon2_hasher import Argon2PasswordHasher
+from app.infrastructure.db.postgres_email_tokens import PostgresEmailTokenRepository
 from app.infrastructure.db.postgres_sessions import PostgresSessionRepository
 from app.infrastructure.db.postgres_users import PostgresUserRepository
+from app.infrastructure.outbox_sender import OutboxEmailSender
 from app.services.account_service import AccountService
+from app.services.email_token_service import EmailTokenService
+from app.services.email_verification import VerificationService
 from app.services.session_service import ActiveSession, SessionService, csrf_matches
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -23,6 +29,10 @@ LOGIN_ATTEMPTS_PER_ADDRESS = 30
 LOGIN_ATTEMPTS_PER_ACCOUNT = 10
 REGISTER_WINDOW_SECONDS = 3600
 REGISTER_ATTEMPTS_PER_ADDRESS = 5
+EMAIL_WINDOW_SECONDS = 3600
+EMAILS_PER_ADDRESS = 10
+EMAILS_PER_ACCOUNT = 3
+UNVERIFIED = "Verify your email address before creating an application."
 
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
@@ -38,10 +48,39 @@ def get_session_service() -> SessionService:
 
 
 @lru_cache
+def get_email_sender() -> EmailSender:
+    return OutboxEmailSender(Path(get_settings().email_outbox_dir))
+
+
+@lru_cache
+def get_email_token_service() -> EmailTokenService:
+    return EmailTokenService(PostgresEmailTokenRepository(get_engine()))
+
+
+@lru_cache
+def get_verification_service() -> VerificationService:
+    return VerificationService(
+        get_account_service(),
+        get_email_token_service(),
+        get_email_sender(),
+        get_settings().app_base_url,
+    )
+
+
+@lru_cache
 def get_login_throttle() -> LoginThrottle:
     return LoginThrottle(
         RateLimiter(LOGIN_ATTEMPTS_PER_ADDRESS, LOGIN_WINDOW_SECONDS),
         RateLimiter(LOGIN_ATTEMPTS_PER_ACCOUNT, LOGIN_WINDOW_SECONDS),
+    )
+
+
+@lru_cache
+def get_email_throttle() -> LoginThrottle:
+    """Limits the emails sent to one address, so nobody can flood someone's inbox."""
+    return LoginThrottle(
+        RateLimiter(EMAILS_PER_ADDRESS, EMAIL_WINDOW_SECONDS),
+        RateLimiter(EMAILS_PER_ACCOUNT, EMAIL_WINDOW_SECONDS),
     )
 
 
@@ -78,6 +117,19 @@ def require_user(
         raise HTTPException(status_code=401, detail="Please log in.")
     if unsafe and not csrf_matches(active.csrf_token, request.headers.get(CSRF_HEADER)):
         raise HTTPException(status_code=403, detail="Invalid CSRF token.")
+    return active
+
+
+def require_verified_user(
+    active: Annotated[ActiveSession, Depends(require_user)],
+    accounts: Annotated[AccountService, Depends(get_account_service)],
+) -> ActiveSession:
+    """A logged-in user whose email address is confirmed: needed for what costs AI calls."""
+    account = accounts.get_account(active.user_id)
+    if account is None:
+        raise HTTPException(status_code=401, detail="Please log in.")
+    if account.email_verified_at is None:
+        raise HTTPException(status_code=403, detail=UNVERIFIED)
     return active
 
 

@@ -49,6 +49,18 @@ class AccountService:
             self._users.update_password_hash(stored.account.id, self._hasher.hash(secret))
         return stored.account
 
+    def find_account(self, email: str) -> Account | None:
+        """The account of an address, or None. Never put the answer in a public reply."""
+        try:
+            address = normalize_email(email)
+        except InvalidEmailError:
+            return None
+        stored = self._users.find_by_email(address)
+        return None if stored is None else stored.account
+
+    def mark_email_verified(self, user_id: uuid.UUID) -> None:
+        self._users.mark_email_verified(user_id)
+
     def get_account(self, user_id: uuid.UUID) -> Account | None:
         return self._users.find_by_id(user_id)
 

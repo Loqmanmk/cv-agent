@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     registration_open: bool = False
     email_outbox_dir: str = "../data/outbox"
+    app_base_url: str = "http://localhost:3000"
 
     @property
     def gemini_model_chain(self) -> list[str]:
