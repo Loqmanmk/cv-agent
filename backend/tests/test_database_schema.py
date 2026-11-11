@@ -41,7 +41,12 @@ def count_applications(connection: Connection) -> int:
 def test_the_migration_creates_both_tables_with_the_expected_columns(clean_engine: Engine) -> None:
     inspector = inspect(clean_engine)
 
-    assert set(inspector.get_table_names()) == {"users", "applications", "alembic_version"}
+    assert set(inspector.get_table_names()) == {
+        "users",
+        "applications",
+        "sessions",
+        "alembic_version",
+    }
     assert {column["name"] for column in inspector.get_columns("users")} == {
         "id",
         "email",
