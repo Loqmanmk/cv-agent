@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app.domain.email_tokens import TOKEN_PURPOSES
 from app.domain.plans import PLANS, USAGE_KINDS
 from app.domain.profile import CV_LANGUAGES, GENDERS
 from app.domain.tracker import STATUSES
@@ -138,3 +139,26 @@ class UsageEvent(Base):
     )
     kind: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EmailToken(Base):
+    __tablename__ = "email_tokens"
+    __table_args__ = (
+        UniqueConstraint("token_hash", name="uq_email_tokens_token_hash"),
+        CheckConstraint(f"purpose IN ({allowed(TOKEN_PURPOSES)})", name="ck_email_tokens_purpose"),
+        CheckConstraint("expires_at > created_at", name="ck_email_tokens_expiry_after_creation"),
+        Index("ix_email_tokens_user_id_purpose", "user_id", "purpose"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_email_tokens_user_id_users", ondelete="CASCADE"),
+    )
+    purpose: Mapped[str] = mapped_column(Text)
+    token_hash: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

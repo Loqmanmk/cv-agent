@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     database_url: SecretStr | None = None
     cookie_secure: bool = False
     registration_open: bool = False
+    email_outbox_dir: str = "../data/outbox"
 
     @property
     def gemini_model_chain(self) -> list[str]:
