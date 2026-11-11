@@ -27,12 +27,19 @@ class Settings(BaseSettings):
     fetch_rate_limit_per_hour: int = 30
     hsts_enabled: bool = False
     database_url: SecretStr | None = None
+    cookie_secure: bool = False
+    registration_open: bool = False
 
     @property
     def gemini_model_chain(self) -> list[str]:
         """The main model first, then the fallbacks, without duplicates."""
         names = [self.gemini_model, *self.gemini_fallback_models.split(",")]
         return list(dict.fromkeys(name.strip() for name in names if name.strip()))
+
+    @property
+    def session_cookie_name(self) -> str:
+        """The __Host- prefix makes browsers refuse a cookie that is not Secure."""
+        return "__Host-session" if self.cookie_secure else "session"
 
     @property
     def cors_origin_list(self) -> list[str]:
