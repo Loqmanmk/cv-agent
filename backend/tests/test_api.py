@@ -4,6 +4,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from app.api.auth_dependencies import require_user
 from app.api.dependencies import get_application_service, get_rate_limiter
 from app.api.rate_limit import RateLimiter
 from app.core.config import Settings, get_settings
@@ -21,6 +22,7 @@ from app.services.letter_conventions import UnsupportedLetterLanguageError
 from app.services.letter_guard import LetterViolationError
 from app.services.page_fitter import PageOverflowError
 from app.services.tailoring_guard import TailoringViolationError
+from tests.auth_helpers import FAKE_SESSION
 from tests.test_application_service import FAKE_PDF, ai_answers, make_docx, make_service
 from tests.test_config import IsolatedSettings
 
@@ -50,6 +52,7 @@ def make_client(service: object, limit: int = 100, city: str = "Oujda") -> TestC
     limiter = RateLimiter(limit, 3600)
     app.dependency_overrides[get_application_service] = lambda: service
     app.dependency_overrides[get_rate_limiter] = lambda: limiter
+    app.dependency_overrides[require_user] = lambda: FAKE_SESSION
     app.dependency_overrides[get_settings] = lambda: settings
     return TestClient(app, raise_server_exceptions=False)
 

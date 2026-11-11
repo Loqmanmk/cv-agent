@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from app.api.auth_dependencies import require_user
 from app.api.dependencies import (
     enforce_fetch_rate_limit,
     enforce_rate_limit,
@@ -49,7 +50,7 @@ def health() -> dict[str, str]:
 @router.post(
     "/applications",
     response_model=ApplicationResponse,
-    dependencies=[Depends(enforce_rate_limit)],
+    dependencies=[Depends(require_user), Depends(enforce_rate_limit)],
 )
 def create_application(
     cv_file: Annotated[UploadFile, File()],
@@ -92,7 +93,7 @@ def create_application(
 @router.post(
     "/render",
     response_model=RenderResponse,
-    dependencies=[Depends(enforce_render_rate_limit)],
+    dependencies=[Depends(require_user), Depends(enforce_render_rate_limit)],
 )
 def render_documents(
     body: RenderRequestBody,
@@ -115,7 +116,7 @@ def render_documents(
 @router.post(
     "/job-offers/fetch",
     response_model=JobTextResponse,
-    dependencies=[Depends(enforce_fetch_rate_limit)],
+    dependencies=[Depends(require_user), Depends(enforce_fetch_rate_limit)],
 )
 def fetch_job_offer(
     body: JobUrlRequest,

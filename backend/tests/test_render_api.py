@@ -3,9 +3,11 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
+from app.api.auth_dependencies import require_user
 from app.api.dependencies import get_render_rate_limiter, get_render_service
 from app.api.rate_limit import RateLimiter
 from app.main import create_app
+from tests.auth_helpers import FAKE_SESSION
 from tests.test_api import make_client, make_settings, upload
 from tests.test_application_service import (
     FAKE_PDF,
@@ -28,6 +30,7 @@ def make_render_client(limit: int = 100) -> tuple[TestClient, FakeConverter]:
     limiter = RateLimiter(limit, 3600)
     app.dependency_overrides[get_render_service] = lambda: service
     app.dependency_overrides[get_render_rate_limiter] = lambda: limiter
+    app.dependency_overrides[require_user] = lambda: FAKE_SESSION
     return TestClient(app, raise_server_exceptions=False), converter
 
 

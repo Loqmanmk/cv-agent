@@ -1,10 +1,12 @@
 from fastapi.testclient import TestClient
 
+from app.api.auth_dependencies import require_user
 from app.api.dependencies import get_fetch_rate_limiter, get_job_fetch_service
 from app.api.rate_limit import RateLimiter
 from app.domain.job_source import JobFetchError
 from app.main import create_app
 from app.services.job_fetch_service import FetchedJobText
+from tests.auth_helpers import FAKE_SESSION
 from tests.test_api import make_settings
 
 URL = "https://example.com/job"
@@ -27,6 +29,7 @@ def make_client(service: object, limit: int = 100) -> TestClient:
     limiter = RateLimiter(limit, 3600)
     app.dependency_overrides[get_job_fetch_service] = lambda: service
     app.dependency_overrides[get_fetch_rate_limiter] = lambda: limiter
+    app.dependency_overrides[require_user] = lambda: FAKE_SESSION
     return TestClient(app, raise_server_exceptions=False)
 
 

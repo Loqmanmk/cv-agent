@@ -67,6 +67,12 @@ class PostgresUserRepository(UserRepository):
             return None
         return StoredAccount(_account(row), row.password_hash)
 
+    def find_by_id(self, user_id: uuid.UUID) -> Account | None:
+        statement = select(*ACCOUNT_COLUMNS).where(User.id == user_id)
+        with self._sessions.begin() as session:
+            row: AccountRow | None = session.execute(statement).one_or_none()
+        return None if row is None else _account(row)
+
     def update_password_hash(self, user_id: uuid.UUID, password_hash: str) -> None:
         statement = update(User).where(User.id == user_id).values(password_hash=password_hash)
         with self._sessions.begin() as session:

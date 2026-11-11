@@ -8,9 +8,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine
 from sqlalchemy.exc import OperationalError
 
+from app.api.auth_dependencies import get_current_user_id
 from app.api.dependencies import get_render_rate_limiter
 from app.api.rate_limit import RateLimiter
-from app.api.tracker_dependencies import get_current_user_id, get_tracker_service
+from app.api.tracker_dependencies import get_tracker_service
 from app.main import create_app
 from tests.db_helpers import add_user
 from tests.test_api import make_settings

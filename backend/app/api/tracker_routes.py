@@ -4,8 +4,9 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Path, Response
 
+from app.api.auth_dependencies import get_current_user_id
 from app.api.dependencies import enforce_render_rate_limit
-from app.api.tracker_dependencies import get_current_user_id, get_tracker_service
+from app.api.tracker_dependencies import get_tracker_service
 from app.api.tracker_schemas import (
     ApplicationSummaryOut,
     SaveApplicationBody,

@@ -9,7 +9,6 @@ from app.domain.accounts import (
     WeakPasswordError,
 )
 from app.infrastructure.argon2_hasher import Argon2PasswordHasher
-from app.infrastructure.db.local_user import LocalUser
 from app.infrastructure.db.postgres_users import PostgresUserRepository
 from app.services.account_service import AccountService
 from app.services.password_policy import MAX_LENGTH
@@ -176,7 +175,11 @@ def test_the_same_password_typed_on_another_keyboard_still_works(
 def test_the_placeholder_user_of_the_tracker_can_never_log_in(
     service: AccountService, clean_engine: Engine
 ) -> None:
-    LocalUser(clean_engine).user_id()
+    with clean_engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO users (email, password_hash) VALUES (:email, '!')"),
+            {"email": "local@cvagent.invalid"},
+        )
 
     with pytest.raises(InvalidCredentialsError):
         service.authenticate("local@cvagent.invalid", "!")

@@ -1,4 +1,5 @@
 import secrets
+import uuid
 
 from app.domain.accounts import (
     Account,
@@ -47,6 +48,9 @@ class AccountService:
         if self._hasher.needs_rehash(stored.password_hash):
             self._users.update_password_hash(stored.account.id, self._hasher.hash(secret))
         return stored.account
+
+    def get_account(self, user_id: uuid.UUID) -> Account | None:
+        return self._users.find_by_id(user_id)
 
     def _spend_the_time_of_a_check(self, secret: str) -> None:
         """Without this, an unknown email would answer faster than a wrong password."""
