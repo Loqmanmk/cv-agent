@@ -21,3 +21,22 @@ def account_exists_email(to: str, login_link: str) -> EmailMessage:
         "If it was not you, ignore this email: your account is safe.\n"
     )
     return EmailMessage(to=to, subject=f"You already have a {PRODUCT} account", text=text)
+
+
+def reset_password_email(to: str, link: str) -> EmailMessage:
+    text = (
+        f"Hello,\n\nTo choose a new password for {PRODUCT}, open this link:\n\n{link}\n\n"
+        "The link works once and expires in 30 minutes.\n\n"
+        "If you did not ask for this, ignore this email: your password stays the same.\n"
+    )
+    return EmailMessage(to=to, subject=f"Reset your {PRODUCT} password", text=text)
+
+
+def password_changed_email(to: str, forgot_link: str) -> EmailMessage:
+    text = (
+        f"Hello,\n\nThe password of your {PRODUCT} account was just changed, "
+        "and every device was logged out.\n\n"
+        "If it was not you, choose a new password right away here:\n\n"
+        f"{forgot_link}\n"
+    )
+    return EmailMessage(to=to, subject=f"Your {PRODUCT} password was changed", text=text)

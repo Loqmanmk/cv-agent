@@ -20,6 +20,13 @@ class TokenBody(BaseModel):
     token: str = Field(min_length=1, max_length=256)
 
 
+class ResetBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1, max_length=256)
+    password: str = Field(min_length=1, max_length=1024)
+
+
 class MessageOut(BaseModel):
     detail: str
 

@@ -22,6 +22,10 @@ class EmailTokenRepository(ABC):
         """Store a new token and delete the unused older ones of the same purpose."""
 
     @abstractmethod
+    def find_valid(self, token_hash: str, purpose: TokenPurpose, now: datetime) -> uuid.UUID | None:
+        """The user of a valid token, without using it up."""
+
+    @abstractmethod
     def consume(self, token_hash: str, purpose: TokenPurpose, now: datetime) -> uuid.UUID | None:
         """Mark a valid token as used and return its user. A token works only once."""
 

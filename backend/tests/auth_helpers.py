@@ -9,6 +9,7 @@ from app.api.auth_dependencies import (
     get_account_service,
     get_email_throttle,
     get_login_throttle,
+    get_password_reset_service,
     get_register_limiter,
     get_session_service,
     get_verification_service,
@@ -24,6 +25,7 @@ from app.main import create_app
 from app.services.account_service import AccountService
 from app.services.email_token_service import EmailTokenService
 from app.services.email_verification import VerificationService
+from app.services.password_reset import PasswordResetService
 from app.services.session_service import ActiveSession, SessionService
 from tests.account_helpers import fast_hasher
 from tests.test_config import IsolatedSettings
@@ -63,7 +65,9 @@ def build_auth_app(
     accounts = AccountService(PostgresUserRepository(engine), fast_hasher())
     sessions = SessionService(PostgresSessionRepository(engine))
     tokens = EmailTokenService(PostgresEmailTokenRepository(engine))
-    verification = VerificationService(accounts, tokens, sender or RecordingEmailSender(), APP_URL)
+    mailer = sender or RecordingEmailSender()
+    verification = VerificationService(accounts, tokens, mailer, APP_URL)
+    resets = PasswordResetService(accounts, tokens, sessions, mailer, APP_URL)
     throttle = LoginThrottle(
         RateLimiter(login_per_address, LOGIN_WINDOW), RateLimiter(login_per_account, LOGIN_WINDOW)
     )
@@ -73,6 +77,7 @@ def build_auth_app(
     app.dependency_overrides[get_account_service] = lambda: accounts
     app.dependency_overrides[get_session_service] = lambda: sessions
     app.dependency_overrides[get_verification_service] = lambda: verification
+    app.dependency_overrides[get_password_reset_service] = lambda: resets
     app.dependency_overrides[get_login_throttle] = lambda: throttle
     app.dependency_overrides[get_email_throttle] = lambda: email_throttle
     app.dependency_overrides[get_register_limiter] = lambda: register_limiter

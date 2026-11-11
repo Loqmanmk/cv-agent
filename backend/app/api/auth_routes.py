@@ -8,6 +8,7 @@ from app.api.auth_dependencies import (
     get_account_service,
     get_email_throttle,
     get_login_throttle,
+    get_password_reset_service,
     get_register_limiter,
     get_session_service,
     get_verification_service,
@@ -15,12 +16,20 @@ from app.api.auth_dependencies import (
     require_user,
     retry_headers,
 )
-from app.api.auth_schemas import Credentials, EmailBody, MessageOut, SessionOut, TokenBody
+from app.api.auth_schemas import (
+    Credentials,
+    EmailBody,
+    MessageOut,
+    ResetBody,
+    SessionOut,
+    TokenBody,
+)
 from app.api.cookies import clear_session_cookie, set_session_cookie
 from app.api.login_throttle import LoginThrottle
 from app.api.rate_limit import RateLimiter
 from app.services.account_service import AccountService
 from app.services.email_verification import VerificationService
+from app.services.password_reset import InvalidResetLinkError, PasswordResetService
 from app.services.session_service import ActiveSession, SessionService
 
 CHECK_INBOX = "Check your inbox: we sent you a link to confirm your email address."
@@ -145,3 +154,37 @@ def me(active: Active, accounts: Accounts) -> SessionOut:
         csrf_token=active.csrf_token,
         email_verified=account.email_verified_at is not None,
     )
+
+
+RESET_SENT = "If an account exists for this address, we sent a link to reset your password."
+RESET_DONE = "Your password was changed and every device was logged out. Log in again."
+
+Resets = Annotated[PasswordResetService, Depends(get_password_reset_service)]
+
+
+@router.post(
+    "/forgot-password",
+    status_code=202,
+    response_model=MessageOut,
+    dependencies=[Depends(require_allowed_origin)],
+)
+def forgot_password(
+    body: EmailBody, request: Request, resets: Resets, emails: EmailThrottle
+) -> MessageOut:
+    _limit_emails(emails, request, body.email)
+    resets.request(body.email)
+    return MessageOut(detail=RESET_SENT)
+
+
+@router.post(
+    "/reset-password", response_model=MessageOut, dependencies=[Depends(require_allowed_origin)]
+)
+def reset_password(
+    body: ResetBody, response: Response, settings: SettingsDep, resets: Resets
+) -> MessageOut:
+    try:
+        resets.reset(body.token, body.password)
+    except InvalidResetLinkError:
+        raise HTTPException(status_code=400, detail=INVALID_LINK) from None
+    clear_session_cookie(response, settings)
+    return MessageOut(detail=RESET_DONE)

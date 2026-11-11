@@ -37,6 +37,12 @@ class EmailTokenService:
         self._tokens.replace(user_id, purpose, hash_token(token), now, expires_at)
         return token
 
+    def peek(self, token: str | None, purpose: TokenPurpose) -> uuid.UUID | None:
+        """The user of a valid token, without using it up."""
+        if token is None or not TOKEN_SHAPE.fullmatch(token):
+            return None
+        return self._tokens.find_valid(hash_token(token), purpose, self._clock())
+
     def consume(self, token: str | None, purpose: TokenPurpose) -> uuid.UUID | None:
         """The user of a valid token, which is then used up. None for anything else."""
         if token is None or not TOKEN_SHAPE.fullmatch(token):

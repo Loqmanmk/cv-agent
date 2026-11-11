@@ -20,6 +20,7 @@ from app.infrastructure.outbox_sender import OutboxEmailSender
 from app.services.account_service import AccountService
 from app.services.email_token_service import EmailTokenService
 from app.services.email_verification import VerificationService
+from app.services.password_reset import PasswordResetService
 from app.services.session_service import ActiveSession, SessionService, csrf_matches
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -138,3 +139,14 @@ def get_current_user_id(active: Annotated[ActiveSession, Depends(require_user)])
 
 
 CurrentUserId = Annotated[uuid.UUID, Depends(get_current_user_id)]
+
+
+@lru_cache
+def get_password_reset_service() -> PasswordResetService:
+    return PasswordResetService(
+        get_account_service(),
+        get_email_token_service(),
+        get_session_service(),
+        get_email_sender(),
+        get_settings().app_base_url,
+    )

@@ -61,6 +61,16 @@ class AccountService:
     def mark_email_verified(self, user_id: uuid.UUID) -> None:
         self._users.mark_email_verified(user_id)
 
+    def validate_new_password(self, email: str, password: str) -> None:
+        """Raise WeakPasswordError when the password breaks the rules for this address."""
+        problems = password_problems(normalize_password(password), email)
+        if problems:
+            raise WeakPasswordError(problems)
+
+    def set_password(self, user_id: uuid.UUID, password: str) -> None:
+        """Store a new password. Call validate_new_password first."""
+        self._users.update_password_hash(user_id, self._hasher.hash(normalize_password(password)))
+
     def get_account(self, user_id: uuid.UUID) -> Account | None:
         return self._users.find_by_id(user_id)
 

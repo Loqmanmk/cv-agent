@@ -1,13 +1,10 @@
-import logging
-
 from app.domain.accounts import Account, EmailAlreadyRegisteredError
 from app.domain.mail import EmailMessage, EmailSender
 from app.services.account_service import AccountService
 from app.services.email_address import normalize_email
 from app.services.email_templates import account_exists_email, verification_email
 from app.services.email_token_service import EmailTokenService
-
-logger = logging.getLogger(__name__)
+from app.services.mailing import clean_base_url, send_quietly
 
 VERIFY_PATH = "/verify-email"
 LOGIN_PATH = "/login"
@@ -23,9 +20,7 @@ class VerificationService:
         sender: EmailSender,
         app_base_url: str,
     ) -> None:
-        base = app_base_url.strip().rstrip("/")
-        if not base.startswith(("http://", "https://")):
-            raise ValueError("APP_BASE_URL must start with http:// or https://")
+        base = clean_base_url(app_base_url)
         self._accounts = accounts
         self._tokens = tokens
         self._sender = sender
@@ -62,8 +57,4 @@ class VerificationService:
         return True
 
     def _send(self, message: EmailMessage) -> None:
-        try:
-            self._sender.send(message)
-        except Exception:
-            # The reply must not depend on delivery, or it would reveal which addresses exist.
-            logger.exception("An email could not be sent.")
+        send_quietly(self._sender, message)

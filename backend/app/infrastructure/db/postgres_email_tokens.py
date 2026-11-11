@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Engine, delete, insert, update
+from sqlalchemy import Engine, delete, insert, select, update
 from sqlalchemy.orm import sessionmaker
 
 from app.domain.email_tokens import EmailTokenRepository, TokenPurpose
@@ -37,6 +37,16 @@ class PostgresEmailTokenRepository(EmailTokenRepository):
         with self._sessions.begin() as session:
             session.execute(older)
             session.execute(new)
+
+    def find_valid(self, token_hash: str, purpose: TokenPurpose, now: datetime) -> uuid.UUID | None:
+        statement = select(EmailToken.user_id).where(
+            EmailToken.token_hash == token_hash,
+            EmailToken.purpose == purpose,
+            EmailToken.used_at.is_(None),
+            EmailToken.expires_at > now,
+        )
+        with self._sessions.begin() as session:
+            return session.execute(statement).scalar_one_or_none()
 
     def consume(self, token_hash: str, purpose: TokenPurpose, now: datetime) -> uuid.UUID | None:
         # One statement checks and marks the token, so two parallel uses cannot both succeed.
