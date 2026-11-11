@@ -1,3 +1,4 @@
+import { getCsrfToken, notifyUnauthorized, SAFE_METHODS } from "@/lib/session";
 import type { CoverLetter, Cv } from "@/lib/types";
 
 export type ApplicationRequestValues = {
@@ -49,7 +50,7 @@ export class ApiError extends Error {
   }
 }
 
-const DEFAULT_API_URL = "http://127.0.0.1:8000";
+const DEFAULT_API_URL = "http://localhost:8000";
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
 type ResultBody = {
@@ -149,6 +150,9 @@ async function toApiError(response: Response): Promise<ApiError> {
     : [];
 
   switch (response.status) {
+    case 401:
+    case 403:
+      return new ApiError(detail, response.status);
     case 413:
       return new ApiError("The upload is too large.", 413);
     case 429:
@@ -162,6 +166,15 @@ async function toApiError(response: Response): Promise<ApiError> {
   }
 }
 
+function headersFor(init: RequestInit): Record<string, string> | undefined {
+  // Our callers only pass plain objects, never a Headers instance or an array.
+  const existing = init.headers as Record<string, string> | undefined;
+  const token = getCsrfToken();
+  const method = (init.method ?? "POST").toUpperCase();
+  if (token === null || SAFE_METHODS.includes(method)) return existing;
+  return { ...existing, "X-CSRF-Token": token };
+}
+
 export async function post(
   path: string,
   init: RequestInit,
@@ -169,11 +182,18 @@ export async function post(
 ): Promise<unknown> {
   let response: Response;
   try {
-    response = await fetch(`${apiBaseUrl()}${path}`, { method: "POST", ...init, signal });
+    response = await fetch(`${apiBaseUrl()}${path}`, {
+      method: "POST",
+      ...init,
+      headers: headersFor(init),
+      credentials: "include",
+      signal,
+    });
   } catch (error) {
     if (isAbortError(error)) throw error;
     throw new ApiError("Cannot reach the server. Check that the backend is running.", 0);
   }
+  if (response.status === 401) notifyUnauthorized();
   if (!response.ok) throw await toApiError(response);
   return response.json().catch(() => null);
 }
