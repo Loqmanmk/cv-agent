@@ -5,6 +5,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.api.account_errors import register_account_error_handlers
+from app.api.account_routes import router as account_router
 from app.api.auth_errors import register_auth_error_handlers
 from app.api.auth_routes import router as auth_router
 from app.api.errors import register_error_handlers
@@ -36,8 +38,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="CV Agent", docs_url=None, redoc_url=None, openapi_url=None)
     register_error_handlers(app)
     register_auth_error_handlers(app)
+    register_account_error_handlers(app)
     app.include_router(router)
     app.include_router(auth_router)
+    app.include_router(account_router)
     app.include_router(tracker_router)
     # Order, from the inside to the outside: size check, security headers, CORS.
     app.middleware("http")(reject_oversized_requests)

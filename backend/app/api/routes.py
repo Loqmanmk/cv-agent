@@ -2,9 +2,10 @@ import base64
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from app.api.auth_dependencies import require_user
+from app.api.account_dependencies import get_profile_service, get_quota_service
+from app.api.auth_dependencies import CurrentUserId, require_user
 from app.api.dependencies import (
     enforce_fetch_rate_limit,
     enforce_rate_limit,
@@ -20,10 +21,11 @@ from app.api.schemas import (
     RenderRequestBody,
     RenderResponse,
 )
-from app.core.config import Settings, get_settings
 from app.domain.document import InvalidPhotoError
 from app.services.application_service import MAX_CV_BYTES, ApplicationRequest, ApplicationService
 from app.services.job_fetch_service import JobFetchService
+from app.services.profile_service import ProfileService
+from app.services.quota_service import QuotaService
 from app.services.render_service import RenderRequest, RenderService
 
 router = APIRouter()
@@ -56,26 +58,30 @@ def create_application(
     cv_file: Annotated[UploadFile, File()],
     job_text: Annotated[str, Form()],
     service: Annotated[ApplicationService, Depends(get_application_service)],
-    settings: Annotated[Settings, Depends(get_settings)],
+    profiles: Annotated[ProfileService, Depends(get_profile_service)],
+    quotas: Annotated[QuotaService, Depends(get_quota_service)],
+    user_id: CurrentUserId,
     include_photo: Annotated[bool, Form()] = True,
 ) -> ApplicationResponse:
-    if not settings.applicant_city:
-        raise HTTPException(
-            status_code=503,
-            detail="The server is not configured: applicant details are missing.",
-        )
+    profile = profiles.require_complete(user_id)
     request = ApplicationRequest(
         cv_filename=cv_file.filename or "",
         cv_content=cv_file.file.read(MAX_CV_BYTES + 1),
         job_text=job_text,
-        address=settings.applicant_address,
-        city=settings.applicant_city,
-        gender=settings.applicant_gender,
+        address=profile.address,
+        city=profile.city,
+        gender=profile.gender,
         today=date.today(),
         include_photo=include_photo,
-        cv_language=settings.applicant_cv_language,
+        cv_language=profile.cv_language,
     )
-    result = service.create(request)
+    reservation = quotas.reserve_application(user_id)
+    try:
+        result = service.create(request)
+    except Exception:
+        # A failed application is not counted: users only use their quota for real documents.
+        quotas.release(user_id, reservation)
+        raise
     return ApplicationResponse(
         job_title=result.offer.title,
         company=result.offer.company,

@@ -19,9 +19,14 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app.domain.plans import PLANS, USAGE_KINDS
+from app.domain.profile import CV_LANGUAGES, GENDERS
 from app.domain.tracker import STATUSES
 
-ALLOWED_STATUSES = ", ".join(f"'{status}'" for status in STATUSES)
+
+def allowed(values: tuple[str, ...]) -> str:
+    """The SQL list of the allowed values of a text column, for a CHECK constraint."""
+    return ", ".join(f"'{value}'" for value in values)
 
 
 class Base(DeclarativeBase):
@@ -33,6 +38,7 @@ class User(Base):
     __table_args__ = (
         UniqueConstraint("email", name="uq_users_email"),
         CheckConstraint("email = lower(email)", name="ck_users_email_lowercase"),
+        CheckConstraint(f"plan IN ({allowed(PLANS)})", name="ck_users_plan"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -41,6 +47,7 @@ class User(Base):
     email: Mapped[str] = mapped_column(Text)
     password_hash: Mapped[str] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, server_default=true())
+    plan: Mapped[str] = mapped_column(Text, server_default="free")
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -48,7 +55,7 @@ class User(Base):
 class ApplicationRecord(Base):
     __tablename__ = "applications"
     __table_args__ = (
-        CheckConstraint(f"status IN ({ALLOWED_STATUSES})", name="ck_applications_status"),
+        CheckConstraint(f"status IN ({allowed(STATUSES)})", name="ck_applications_status"),
         Index("ix_applications_user_id_id", "user_id", "id"),
     )
 
@@ -94,3 +101,40 @@ class UserSession(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ProfileRecord(Base):
+    __tablename__ = "profiles"
+    __table_args__ = (
+        CheckConstraint(f"gender IN ({allowed(GENDERS)})", name="ck_profiles_gender"),
+        CheckConstraint(
+            f"cv_language IN ({allowed(CV_LANGUAGES)})", name="ck_profiles_cv_language"
+        ),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_profiles_user_id_users", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    address: Mapped[str] = mapped_column(Text, server_default="")
+    city: Mapped[str] = mapped_column(Text, server_default="")
+    gender: Mapped[str] = mapped_column(Text, server_default="m")
+    cv_language: Mapped[str] = mapped_column(Text, server_default="fr")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UsageEvent(Base):
+    __tablename__ = "usage_events"
+    __table_args__ = (
+        CheckConstraint(f"kind IN ({allowed(USAGE_KINDS)})", name="ck_usage_events_kind"),
+        Index("ix_usage_events_user_id_kind_created_at", "user_id", "kind", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_usage_events_user_id_users", ondelete="CASCADE"),
+    )
+    kind: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -45,6 +45,8 @@ def test_the_migration_creates_both_tables_with_the_expected_columns(clean_engin
         "users",
         "applications",
         "sessions",
+        "profiles",
+        "usage_events",
         "alembic_version",
     }
     assert {column["name"] for column in inspector.get_columns("users")} == {
@@ -53,6 +55,7 @@ def test_the_migration_creates_both_tables_with_the_expected_columns(clean_engin
         "password_hash",
         "is_active",
         "email_verified_at",
+        "plan",
         "created_at",
     }
     assert {column["name"] for column in inspector.get_columns("applications")} == {
