@@ -22,7 +22,12 @@ from app.api.rate_limit import RateLimiter
 from app.core.config import Settings
 from app.domain.oauth import OAuthError
 from app.infrastructure.google_oidc import GoogleOidcClient
-from app.services.external_login import UNAVAILABLE, UNVERIFIED_EMAIL, ExternalLoginService
+from app.services.external_login import (
+    REGISTRATION_CLOSED,
+    UNAVAILABLE,
+    UNVERIFIED_EMAIL,
+    ExternalLoginService,
+)
 from app.services.mailing import clean_base_url
 from app.services.session_service import SessionService
 
@@ -36,7 +41,11 @@ FAILED = "google_failed"
 CANCELLED = "google_cancelled"
 NOT_CONFIGURED = "google_unavailable"
 BUSY = "google_busy"
-REASONS = {UNVERIFIED_EMAIL: "google_unverified", UNAVAILABLE: "account_unavailable"}
+REASONS = {
+    UNVERIFIED_EMAIL: "google_unverified",
+    UNAVAILABLE: "account_unavailable",
+    REGISTRATION_CLOSED: "registration_closed",
+}
 
 Google = Annotated[GoogleOidcClient | None, Depends(get_google_client)]
 Logins = Annotated[ExternalLoginService, Depends(get_external_login_service)]
@@ -110,7 +119,8 @@ def callback(
         return _back_to_login(settings, checked)
     client, signin, answer_code = checked
     try:
-        account = logins.sign_in(client.finish(answer_code, signin.code_verifier, signin.nonce))
+        identity = client.finish(answer_code, signin.code_verifier, signin.nonce)
+        account = logins.sign_in(identity, allow_new=settings.registration_open)
     except OAuthError as exc:
         return _back_to_login(settings, REASONS.get(str(exc), FAILED))
     sessions.end(request.cookies.get(settings.session_cookie_name))

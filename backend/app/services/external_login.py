@@ -12,6 +12,7 @@ from app.services.session_service import SessionService
 FAILED = "Signing in with Google failed. Please try again."
 UNVERIFIED_EMAIL = "Your Google email address is not verified, so it cannot be used here."
 UNAVAILABLE = "This account cannot be used."
+REGISTRATION_CLOSED = "New accounts cannot be created at the moment."
 
 
 def _active(account: Account | None) -> Account:
@@ -33,14 +34,15 @@ class ExternalLoginService:
         self._identities = identities
         self._sessions = sessions
 
-    def sign_in(self, identity: ExternalIdentity) -> Account:
+    def sign_in(self, identity: ExternalIdentity, *, allow_new: bool = True) -> Account:
+        """The account of this identity. `allow_new=False` never creates one."""
         if not identity.email_verified:
             raise OAuthError(UNVERIFIED_EMAIL)
         known = self._identities.find_user(identity.provider, identity.subject)
         if known is not None:
             return _active(self._users.find_by_id(known))
         address = self._address(identity.email)
-        account = self._existing_or_new(address)
+        account = self._existing_or_new(address, allow_new)
         self._identities.link(account.id, identity.provider, identity.subject, address)
         return _active(self._users.find_by_id(account.id))
 
@@ -51,9 +53,11 @@ class ExternalLoginService:
         except InvalidEmailError as exc:
             raise OAuthError(FAILED) from exc
 
-    def _existing_or_new(self, address: str) -> Account:
+    def _existing_or_new(self, address: str, allow_new: bool) -> Account:
         stored = self._users.find_by_email(address)
         if stored is None:
+            if not allow_new:
+                raise OAuthError(REGISTRATION_CLOSED)
             try:
                 return self._users.create_external(address)
             except EmailAlreadyRegisteredError:

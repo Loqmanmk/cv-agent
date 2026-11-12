@@ -48,8 +48,13 @@ class FakeGoogle:
         return self.identity
 
 
-def build_app(engine: Engine, google: FakeGoogle | None, limit: int = 100) -> FastAPI:
-    app = build_auth_app(engine)
+def build_app(
+    engine: Engine,
+    google: FakeGoogle | None,
+    limit: int = 100,
+    registration_open: bool = True,
+) -> FastAPI:
+    app = build_auth_app(engine, registration_open=registration_open)
     sessions = SessionService(PostgresSessionRepository(engine))
     logins = ExternalLoginService(
         PostgresUserRepository(engine), PostgresOAuthIdentityRepository(engine), sessions
@@ -202,3 +207,24 @@ def test_an_overlong_code_is_refused_before_asking_google(clean_engine: Engine) 
 
     assert response.status_code >= 400
     assert google.finished == []
+
+
+def test_closed_registration_refuses_a_new_google_account(clean_engine: Engine) -> None:
+    client = make_client(build_app(clean_engine, FakeGoogle(), registration_open=False))
+    begin(client)
+
+    assert login_error(answer(client)) == "registration_closed"
+    assert count_users(clean_engine) == 0
+
+
+def test_closed_registration_still_lets_an_existing_account_in(clean_engine: Engine) -> None:
+    first = make_client(build_app(clean_engine, FakeGoogle()))
+    begin(first)
+    answer(first)
+    client = make_client(build_app(clean_engine, FakeGoogle(), registration_open=False))
+    begin(client)
+
+    response = answer(client)
+
+    assert response.headers["location"] == f"{APP_URL}/"
+    assert client.get("/auth/me").status_code == 200
