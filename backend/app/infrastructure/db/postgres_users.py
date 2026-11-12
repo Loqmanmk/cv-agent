@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 
 from app.domain.accounts import (
+    NO_LOGIN_HASH,
     Account,
     EmailAlreadyRegisteredError,
     StoredAccount,
@@ -55,6 +56,24 @@ class PostgresUserRepository(UserRepository):
         )
         with self._sessions.begin() as session:
             row = session.execute(statement).one_or_none()
+        if row is None:
+            raise EmailAlreadyRegisteredError
+        return _account(row)
+
+    def create_external(self, email: str) -> Account:
+        """A verified account without a usable password, for a provider sign-in."""
+        statement = (
+            insert(User)
+            .values(
+                email=email,
+                password_hash=NO_LOGIN_HASH,
+                email_verified_at=func.now(),
+            )
+            .on_conflict_do_nothing(index_elements=["email"])
+            .returning(*ACCOUNT_COLUMNS)
+        )
+        with self._sessions.begin() as session:
+            row: AccountRow | None = session.execute(statement).one_or_none()
         if row is None:
             raise EmailAlreadyRegisteredError
         return _account(row)

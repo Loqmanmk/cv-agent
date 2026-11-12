@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     registration_open: bool = False
     email_outbox_dir: str = "../data/outbox"
     app_base_url: str = "http://localhost:3000"
+    google_client_id: str = ""
+    google_client_secret: SecretStr | None = None
+    google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
 
     @property
     def gemini_model_chain(self) -> list[str]:

@@ -3,6 +3,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 
+# Not a valid password hash, so no password can ever match it.
+NO_LOGIN_HASH = "!"
+
 
 class InvalidEmailError(Exception):
     """Raised when an email address is not acceptable. The message is safe to show."""
@@ -60,6 +63,10 @@ class UserRepository(ABC):
     @abstractmethod
     def create(self, email: str, password_hash: str) -> Account:
         """Create the account, or raise EmailAlreadyRegisteredError."""
+
+    @abstractmethod
+    def create_external(self, email: str) -> Account:
+        """Create a verified account without a usable password."""
 
     @abstractmethod
     def find_by_email(self, email: str) -> StoredAccount | None: ...
