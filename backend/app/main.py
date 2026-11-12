@@ -10,6 +10,7 @@ from app.api.account_routes import router as account_router
 from app.api.auth_errors import register_auth_error_handlers
 from app.api.auth_routes import router as auth_router
 from app.api.errors import register_error_handlers
+from app.api.google_routes import router as google_router
 from app.api.routes import router
 from app.api.security import security_headers_middleware
 from app.api.tracker_routes import router as tracker_router
@@ -41,6 +42,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     register_account_error_handlers(app)
     app.include_router(router)
     app.include_router(auth_router)
+    app.include_router(google_router)
     app.include_router(account_router)
     app.include_router(tracker_router)
     # Order, from the inside to the outside: size check, security headers, CORS.
