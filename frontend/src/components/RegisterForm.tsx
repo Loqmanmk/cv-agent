@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 
 import { ErrorBox } from "@/components/ErrorBox";
+import { GoogleButton } from "@/components/GoogleButton";
 import { PasswordFields } from "@/components/PasswordFields";
 import { register } from "@/lib/authApi";
 import { toShownError, type ShownError } from "@/lib/errors";
@@ -56,6 +57,7 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} noValidate className="mt-6 space-y-4">
+      <GoogleButton />
       <div>
         <label htmlFor="register-email" className="block text-sm font-medium">
           Email

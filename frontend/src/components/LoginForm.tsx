@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { useAuth } from "@/components/AuthProvider";
+import { GoogleButton } from "@/components/GoogleButton";
 import { ApiError } from "@/lib/api";
+import { useGoogleError } from "@/lib/googleSignIn";
 
 const GENERIC_ERROR = "Something went wrong. Please try again.";
 
@@ -16,6 +18,7 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const googleError = useGoogleError();
 
   useEffect(() => {
     if (status === "authenticated") router.replace("/");
@@ -46,10 +49,11 @@ export function LoginForm() {
     );
   }
 
-  const message = error ?? startupError;
+  const message = error ?? googleError ?? startupError;
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} noValidate className="mt-6 space-y-4">
+      <GoogleButton />
       <div>
         <label htmlFor="login-email" className="block text-sm font-medium">
           Email
