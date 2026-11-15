@@ -2,7 +2,8 @@ import { getCsrfToken, notifyUnauthorized, SAFE_METHODS } from "@/lib/session";
 import type { CoverLetter, Cv } from "@/lib/types";
 
 export type ApplicationRequestValues = {
-  cvFile: File;
+  /** null: the server uses the CV saved on the account. */
+  cvFile: File | null;
   jobText: string;
   includePhoto: boolean;
 };
@@ -210,7 +211,7 @@ export async function createApplication(
   signal?: AbortSignal,
 ): Promise<ApplicationResult> {
   const body = new FormData();
-  body.append("cv_file", values.cvFile);
+  if (values.cvFile !== null) body.append("cv_file", values.cvFile);
   body.append("job_text", values.jobText);
   body.append("include_photo", String(values.includePhoto));
 

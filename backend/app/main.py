@@ -15,7 +15,7 @@ from app.api.routes import router
 from app.api.security import security_headers_middleware
 from app.api.tracker_routes import router as tracker_router
 from app.core.config import Settings, get_settings
-from app.services.application_service import MAX_CV_BYTES
+from app.domain.document import MAX_CV_BYTES
 
 MAX_REQUEST_BYTES = MAX_CV_BYTES + 200_000
 

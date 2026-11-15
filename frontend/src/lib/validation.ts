@@ -5,6 +5,8 @@ export const ALLOWED_EXTENSIONS = [".docx", ".pdf"] as const;
 export type ApplicationInput = {
   cvFile: File | null;
   jobText: string;
+  /** True when the saved CV is used, so no file has to be chosen. */
+  usesSavedCv?: boolean;
 };
 
 export type ValidationErrors = {
@@ -34,7 +36,7 @@ function validateJobText(text: string): string | null {
 
 export function validateApplication(input: ApplicationInput): ValidationErrors {
   const errors: ValidationErrors = {};
-  const cvError = validateCvFile(input.cvFile);
+  const cvError = input.usesSavedCv ? null : validateCvFile(input.cvFile);
   const jobError = validateJobText(input.jobText);
   if (cvError) errors.cvFile = cvError;
   if (jobError) errors.jobText = jobError;

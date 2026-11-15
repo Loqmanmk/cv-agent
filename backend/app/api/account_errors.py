@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.domain.plans import QuotaExceededError, UnknownUserError
 from app.domain.profile import InvalidProfileError, ProfileIncompleteError
+from app.domain.saved_cv import NoSavedCvError
 
 
 def register_account_error_handlers(app: FastAPI) -> None:
@@ -22,6 +23,10 @@ def register_account_error_handlers(app: FastAPI) -> None:
             "resets_at": exc.resets_at.isoformat(),
         }
         return JSONResponse(status_code=402, content=content)
+
+    @app.exception_handler(NoSavedCvError)
+    def no_saved_cv(_request: Request, exc: NoSavedCvError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": str(exc)})
 
     @app.exception_handler(UnknownUserError)
     def unknown_user(_request: Request, _exc: UnknownUserError) -> JSONResponse:

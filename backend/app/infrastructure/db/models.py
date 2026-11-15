@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+from app.domain.document import MAX_CV_BYTES
 from app.domain.email_tokens import TOKEN_PURPOSES
 from app.domain.oauth import PROVIDERS
 from app.domain.plans import PLANS, USAGE_KINDS
@@ -163,6 +164,26 @@ class EmailToken(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SavedCvRecord(Base):
+    __tablename__ = "saved_cvs"
+    __table_args__ = (
+        CheckConstraint(
+            f"octet_length(content) BETWEEN 1 AND {MAX_CV_BYTES}", name="ck_saved_cvs_content_size"
+        ),
+    )
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", name="fk_saved_cvs_user_id_users", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    filename: Mapped[str] = mapped_column(Text)
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class OAuthIdentity(Base):

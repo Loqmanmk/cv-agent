@@ -4,7 +4,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 
-from app.api.account_dependencies import get_profile_service, get_quota_service
+from app.api.account_dependencies import (
+    get_profile_service,
+    get_quota_service,
+    get_saved_cv_service,
+)
 from app.api.auth_dependencies import CurrentUserId, require_user, require_verified_user
 from app.api.dependencies import (
     enforce_fetch_rate_limit,
@@ -21,12 +25,13 @@ from app.api.schemas import (
     RenderRequestBody,
     RenderResponse,
 )
-from app.domain.document import InvalidPhotoError
-from app.services.application_service import MAX_CV_BYTES, ApplicationRequest, ApplicationService
+from app.domain.document import MAX_CV_BYTES, InvalidPhotoError
+from app.services.application_service import ApplicationRequest, ApplicationService
 from app.services.job_fetch_service import JobFetchService
 from app.services.profile_service import ProfileService
 from app.services.quota_service import QuotaService
 from app.services.render_service import RenderRequest, RenderService
+from app.services.saved_cv_service import SavedCvService
 
 router = APIRouter()
 
@@ -55,18 +60,25 @@ def health() -> dict[str, str]:
     dependencies=[Depends(require_verified_user), Depends(enforce_rate_limit)],
 )
 def create_application(
-    cv_file: Annotated[UploadFile, File()],
     job_text: Annotated[str, Form()],
     service: Annotated[ApplicationService, Depends(get_application_service)],
     profiles: Annotated[ProfileService, Depends(get_profile_service)],
     quotas: Annotated[QuotaService, Depends(get_quota_service)],
+    saved_cvs: Annotated[SavedCvService, Depends(get_saved_cv_service)],
     user_id: CurrentUserId,
     include_photo: Annotated[bool, Form()] = True,
+    cv_file: Annotated[UploadFile | None, File()] = None,
 ) -> ApplicationResponse:
+    """Uses the uploaded file, or the saved CV of the user when no file is sent."""
     profile = profiles.require_complete(user_id)
+    if cv_file is None:
+        saved = saved_cvs.require(user_id)
+        cv_filename, cv_content = saved.filename, saved.content
+    else:
+        cv_filename, cv_content = cv_file.filename or "", cv_file.file.read(MAX_CV_BYTES + 1)
     request = ApplicationRequest(
-        cv_filename=cv_file.filename or "",
-        cv_content=cv_file.file.read(MAX_CV_BYTES + 1),
+        cv_filename=cv_filename,
+        cv_content=cv_content,
         job_text=job_text,
         address=profile.address,
         city=profile.city,

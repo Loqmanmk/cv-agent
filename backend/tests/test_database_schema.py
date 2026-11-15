@@ -49,6 +49,7 @@ def test_the_migration_creates_both_tables_with_the_expected_columns(clean_engin
         "usage_events",
         "email_tokens",
         "oauth_identities",
+        "saved_cvs",
         "alembic_version",
     }
     assert {column["name"] for column in inspector.get_columns("users")} == {

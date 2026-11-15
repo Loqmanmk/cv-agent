@@ -1,11 +1,12 @@
 import logging
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import PurePath
 
 from app.domain.cv import CV
 from app.domain.document import (
+    MAX_CV_BYTES,
     DocumentParser,
     ExtractedImage,
     InvalidPhotoError,
@@ -29,12 +30,28 @@ from app.services.photo_selector import PhotoSelector
 
 logger = logging.getLogger(__name__)
 
-MAX_CV_BYTES = 5_000_000
 SIGNATURES = {".docx": b"PK", ".pdf": b"%PDF"}
 
 
 class InvalidApplicationInputError(Exception):
     """Raised when the uploaded CV file is not acceptable."""
+
+
+def check_cv_file(filename: str, content: bytes, allowed: Collection[str] = SIGNATURES) -> str:
+    """The extension of an acceptable CV file, or InvalidApplicationInputError."""
+    extension = PurePath(filename).suffix.lower()
+    if extension not in allowed:
+        raise InvalidApplicationInputError(
+            f"Unsupported file type. Use: {', '.join(sorted(allowed))}"
+        )
+    if not content:
+        raise InvalidApplicationInputError("The CV file is empty.")
+    if len(content) > MAX_CV_BYTES:
+        raise InvalidApplicationInputError("The CV file is too large (5 MB maximum).")
+    signature = SIGNATURES.get(extension)
+    if signature and not content.startswith(signature):
+        raise InvalidApplicationInputError("The file content does not match its extension.")
+    return extension
 
 
 @dataclass(frozen=True)
@@ -133,22 +150,11 @@ class ApplicationService:
             return None
 
     def _parse(self, request: ApplicationRequest) -> ParsedDocument:
-        extension = PurePath(request.cv_filename).suffix.lower()
-        parser = self._parsers.get(extension)
-        if parser is None:
-            allowed = ", ".join(sorted(self._parsers))
-            raise InvalidApplicationInputError(f"Unsupported file type. Use: {allowed}")
-        if not request.cv_content:
-            raise InvalidApplicationInputError("The CV file is empty.")
-        if len(request.cv_content) > MAX_CV_BYTES:
-            raise InvalidApplicationInputError("The CV file is too large (5 MB maximum).")
-        return self._safe_parse(parser, extension, request.cv_content)
+        extension = check_cv_file(request.cv_filename, request.cv_content, self._parsers)
+        return self._safe_parse(self._parsers[extension], request.cv_content)
 
     @staticmethod
-    def _safe_parse(parser: DocumentParser, extension: str, content: bytes) -> ParsedDocument:
-        signature = SIGNATURES.get(extension)
-        if signature and not content.startswith(signature):
-            raise InvalidApplicationInputError("The file content does not match its extension.")
+    def _safe_parse(parser: DocumentParser, content: bytes) -> ParsedDocument:
         try:
             return parser.parse(content)
         except Exception as exc:  # untrusted file: any parser failure is an input problem

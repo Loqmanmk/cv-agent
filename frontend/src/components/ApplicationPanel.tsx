@@ -7,6 +7,7 @@ import { ErrorHint } from "@/components/ErrorHint";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import { ApiError, createApplication, renderDocuments, type ApplicationResult } from "@/lib/api";
 import { base64ToPdfBlob, documentFileName } from "@/lib/pdf";
+import { uploadSavedCv, type SavedCv } from "@/lib/savedCvApi";
 import { saveApplication } from "@/lib/trackerApi";
 
 const CREATE_TIMEOUT_MS = 420_000;
@@ -79,9 +80,20 @@ function beginRequest(timeoutMs: number) {
   };
 }
 
-type Props = { onCreated?: () => void };
+type Props = {
+  onCreated?: () => void;
+  savedCv?: SavedCv | null;
+  /** Called when the user saves a new CV. Without it, CVs are never saved. */
+  onSavedCvChange?: (savedCv: SavedCv) => void;
+  onRemoveSavedCv?: () => void;
+};
 
-export function ApplicationPanel({ onCreated }: Props = {}) {
+export function ApplicationPanel({
+  onCreated,
+  savedCv = null,
+  onSavedCvChange,
+  onRemoveSavedCv,
+}: Props = {}) {
   const [state, setState] = useState<State>({ phase: "idle" });
   const [save, setSave] = useState<SaveState>({ phase: "idle" });
   const controllerRef = useRef<AbortController | null>(null);
@@ -106,7 +118,16 @@ export function ApplicationPanel({ onCreated }: Props = {}) {
     setSave({ phase: "idle" });
     setState({ phase: "loading" });
     try {
-      const result = await createApplication(values, request.controller.signal);
+      let cvFile = values.cvFile;
+      if (cvFile !== null && values.saveCv && onSavedCvChange) {
+        // Saved first, so the application then uses the saved CV and the file is sent once.
+        onSavedCvChange(await uploadSavedCv(cvFile, request.controller.signal));
+        cvFile = null;
+      }
+      const result = await createApplication(
+        { cvFile, jobText: values.jobText, includePhoto: values.includePhoto },
+        request.controller.signal,
+      );
       setState({
         phase: "done",
         result,
@@ -191,6 +212,9 @@ export function ApplicationPanel({ onCreated }: Props = {}) {
       <ApplicationForm
         onSubmit={(values) => void handleSubmit(values)}
         disabled={state.phase === "loading"}
+        savedCv={savedCv}
+        canSaveCv={onSavedCvChange !== undefined}
+        onRemoveSavedCv={onRemoveSavedCv}
       />
 
       {state.phase === "loading" && (

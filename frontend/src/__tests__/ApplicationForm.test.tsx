@@ -46,6 +46,7 @@ describe("ApplicationForm", () => {
       cvFile: cv,
       jobText: "Acme seeks an intern.",
       includePhoto: true,
+      saveCv: false,
     });
   });
 

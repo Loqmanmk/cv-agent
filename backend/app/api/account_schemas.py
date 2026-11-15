@@ -25,6 +25,12 @@ class ProfileOut(BaseModel):
     is_complete: bool
 
 
+class SavedCvOut(BaseModel):
+    filename: str
+    size: int
+    uploaded_at: datetime
+
+
 class UsageOut(BaseModel):
     plan: Plan
     used: int

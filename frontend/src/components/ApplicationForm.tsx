@@ -3,17 +3,26 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError, fetchJobText } from "@/lib/api";
+import { formatDay } from "@/lib/format";
+import type { SavedCv } from "@/lib/savedCvApi";
 import { MAX_JOB_CHARS, validateApplication, type ValidationErrors } from "@/lib/validation";
 
 export type ApplicationFormValues = {
-  cvFile: File;
+  /** null: use the CV saved on the account. */
+  cvFile: File | null;
   jobText: string;
   includePhoto: boolean;
+  /** Keep the chosen file as the saved CV for the next applications. */
+  saveCv: boolean;
 };
 
 type Props = {
   onSubmit: (values: ApplicationFormValues) => void;
   disabled?: boolean;
+  savedCv?: SavedCv | null;
+  /** Shows the "save this CV" choice. Off when nothing can store the CV. */
+  canSaveCv?: boolean;
+  onRemoveSavedCv?: () => void;
 };
 
 type FetchState =
@@ -29,8 +38,18 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
 }
 
-export function ApplicationForm({ onSubmit, disabled = false }: Props) {
+export function ApplicationForm({
+  onSubmit,
+  disabled = false,
+  savedCv = null,
+  canSaveCv = false,
+  onRemoveSavedCv,
+}: Props) {
   const [cvFile, setCvFile] = useState<File | null>(null);
+  // The saved CV being replaced. A newly saved CV has another date, so it is shown again.
+  const [replacing, setReplacing] = useState<string | null>(null);
+  const [saveCv, setSaveCv] = useState(true);
+  const usesSavedCv = savedCv !== null && replacing !== savedCv.uploadedAt;
   const [jobText, setJobText] = useState("");
   const [includePhoto, setIncludePhoto] = useState(true);
   const [errors, setErrors] = useState<ValidationErrors>({});
@@ -77,36 +96,93 @@ export function ApplicationForm({ onSubmit, disabled = false }: Props) {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const found = validateApplication({ cvFile, jobText });
+    const found = validateApplication({ cvFile, jobText, usesSavedCv });
     setErrors(found);
-    if (found.cvFile || found.jobText || !cvFile) return;
-    onSubmit({ cvFile, jobText: jobText.trim(), includePhoto });
+    if (found.cvFile || found.jobText) return;
+    if (usesSavedCv) {
+      onSubmit({ cvFile: null, jobText: jobText.trim(), includePhoto, saveCv: false });
+    } else if (cvFile) {
+      onSubmit({ cvFile, jobText: jobText.trim(), includePhoto, saveCv: canSaveCv && saveCv });
+    }
   }
 
   const fetching = fetchState.phase === "loading";
 
   return (
     <form onSubmit={handleSubmit} noValidate className="mt-8 space-y-6">
-      <div>
-        <label htmlFor="cv-file" className="block text-sm font-medium">
-          CV file (.docx or .pdf)
-        </label>
-        <input
-          id="cv-file"
-          type="file"
-          accept=".docx,.pdf"
-          disabled={disabled}
-          aria-invalid={errors.cvFile ? true : undefined}
-          aria-describedby={errors.cvFile ? "cv-file-error" : undefined}
-          onChange={(event) => setCvFile(event.target.files?.[0] ?? null)}
-          className="mt-1 block w-full text-sm"
-        />
-        {errors.cvFile && (
-          <p id="cv-file-error" role="alert" className="mt-1 text-sm text-red-600">
-            {errors.cvFile}
+      {usesSavedCv ? (
+        <section aria-label="Your CV" className="rounded border border-gray-300 p-3 text-sm">
+          <p>
+            Your saved CV: <span className="font-medium">{savedCv.filename}</span>
           </p>
-        )}
-      </div>
+          <p className="text-gray-500">Saved on {formatDay(savedCv.uploadedAt)}</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setReplacing(savedCv.uploadedAt)}
+              disabled={disabled}
+              className="rounded border border-gray-400 px-3 py-1 font-medium disabled:opacity-50"
+            >
+              Change my CV
+            </button>
+            {onRemoveSavedCv && (
+              <button
+                type="button"
+                onClick={onRemoveSavedCv}
+                disabled={disabled}
+                className="rounded px-3 py-1 text-red-700 underline disabled:opacity-50"
+              >
+                Delete my saved CV
+              </button>
+            )}
+          </div>
+        </section>
+      ) : (
+        <div>
+          <label htmlFor="cv-file" className="block text-sm font-medium">
+            CV file (.docx or .pdf)
+          </label>
+          <input
+            id="cv-file"
+            type="file"
+            accept=".docx,.pdf"
+            disabled={disabled}
+            aria-invalid={errors.cvFile ? true : undefined}
+            aria-describedby={errors.cvFile ? "cv-file-error" : undefined}
+            onChange={(event) => setCvFile(event.target.files?.[0] ?? null)}
+            className="mt-1 block w-full text-sm"
+          />
+          {errors.cvFile && (
+            <p id="cv-file-error" role="alert" className="mt-1 text-sm text-red-600">
+              {errors.cvFile}
+            </p>
+          )}
+          {canSaveCv && (
+            <div className="mt-2 flex items-center gap-2">
+              <input
+                id="save-cv"
+                type="checkbox"
+                checked={saveCv}
+                disabled={disabled}
+                onChange={(event) => setSaveCv(event.target.checked)}
+              />
+              <label htmlFor="save-cv" className="text-sm">
+                Save this CV for my next applications
+              </label>
+            </div>
+          )}
+          {savedCv !== null && (
+            <button
+              type="button"
+              onClick={() => setReplacing(null)}
+              disabled={disabled}
+              className="mt-2 text-sm underline disabled:opacity-50"
+            >
+              Keep my saved CV ({savedCv.filename})
+            </button>
+          )}
+        </div>
+      )}
 
       <div>
         <label htmlFor="job-url" className="block text-sm font-medium">

@@ -6,17 +6,22 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-from app.api.account_dependencies import get_profile_service, get_quota_service
+from app.api.account_dependencies import (
+    get_profile_service,
+    get_quota_service,
+    get_saved_cv_service,
+)
 from app.api.auth_dependencies import require_user, require_verified_user
 from app.api.dependencies import get_application_service, get_rate_limiter
 from app.api.rate_limit import RateLimiter
 from app.core.config import Settings, get_settings
+from app.domain.document import MAX_CV_BYTES
 from app.domain.llm import LLMError, LLMUnavailableError
 from app.domain.plans import QuotaExceededError
 from app.domain.profile import Profile, ProfileIncompleteError
+from app.domain.saved_cv import NoSavedCvError, SavedCv
 from app.main import MAX_REQUEST_BYTES, create_app
 from app.services.application_service import (
-    MAX_CV_BYTES,
     ApplicationRequest,
     ApplicationResult,
     InvalidApplicationInputError,
@@ -74,6 +79,16 @@ class FakeQuotas:
         self.released += 1
 
 
+class FakeSavedCvs:
+    def __init__(self, saved: SavedCv | None = None) -> None:
+        self._saved = saved
+
+    def require(self, user_id: uuid.UUID) -> SavedCv:
+        if self._saved is None:
+            raise NoSavedCvError
+        return self._saved
+
+
 def make_settings() -> Settings:
     return IsolatedSettings(cors_origins=ORIGIN)
 
@@ -83,12 +98,15 @@ def make_client(
     limit: int = 100,
     profiles: FakeProfiles | None = None,
     quotas: FakeQuotas | None = None,
+    saved_cvs: FakeSavedCvs | None = None,
 ) -> TestClient:
     settings = make_settings()
     app = create_app(settings)
     limiter = RateLimiter(limit, 3600)
     profile_service = profiles or FakeProfiles()
     quota_service = quotas or FakeQuotas()
+    saved_cv_service = saved_cvs or FakeSavedCvs()
+    app.dependency_overrides[get_saved_cv_service] = lambda: saved_cv_service
     app.dependency_overrides[get_application_service] = lambda: service
     app.dependency_overrides[get_rate_limiter] = lambda: limiter
     app.dependency_overrides[require_user] = lambda: FAKE_SESSION
@@ -180,10 +198,37 @@ def test_a_failed_application_is_not_counted() -> None:
     assert (quotas.reserved, quotas.released) == (1, 1)
 
 
-def test_a_missing_file_is_a_validation_error() -> None:
-    response = make_client(object()).post("/applications", data={"job_text": "x"})
+def test_without_a_file_or_a_saved_cv_the_user_is_asked_to_upload() -> None:
+    stub = StubService(RuntimeError("must not run"))
+    quotas = FakeQuotas()
+
+    response = make_client(stub, quotas=quotas).post("/applications", data={"job_text": "x"})
 
     assert response.status_code == 422
+    assert "no saved CV" in response.json()["detail"]
+    assert stub.requests == []
+    assert quotas.reserved == 0
+
+
+def test_without_a_file_the_saved_cv_is_used() -> None:
+    stub = StubService(InvalidApplicationInputError("bad"))
+    saved = FakeSavedCvs(SavedCv(filename="saved.pdf", content=b"%PDF-saved"))
+
+    make_client(stub, saved_cvs=saved).post("/applications", data={"job_text": "x"})
+
+    assert (stub.requests[0].cv_filename, stub.requests[0].cv_content) == (
+        "saved.pdf",
+        b"%PDF-saved",
+    )
+
+
+def test_an_uploaded_file_wins_over_the_saved_cv() -> None:
+    stub = StubService(InvalidApplicationInputError("bad"))
+    saved = FakeSavedCvs(SavedCv(filename="saved.pdf", content=b"%PDF-saved"))
+
+    upload(make_client(stub, saved_cvs=saved))
+
+    assert stub.requests[0].cv_filename == "cv.docx"
 
 
 def test_a_renamed_file_is_refused_with_a_clean_message() -> None:

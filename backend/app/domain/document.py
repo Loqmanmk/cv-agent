@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+MAX_CV_BYTES = 5_000_000
+
 
 @dataclass(frozen=True)
 class ExtractedImage:

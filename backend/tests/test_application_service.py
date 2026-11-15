@@ -6,6 +6,7 @@ import pytest
 from docx import Document
 from pydantic import BaseModel
 
+from app.domain.document import MAX_CV_BYTES
 from app.domain.job import JobOffer, OfferLanguage
 from app.domain.pdf import PdfConverter, PdfPageCounter
 from app.infrastructure.cv_html_builder import CVHtmlBuilder
@@ -14,7 +15,6 @@ from app.infrastructure.letter_html_builder import LetterHtmlBuilder
 from app.infrastructure.pdf_parser import PdfParser
 from app.infrastructure.photo_sanitizer import PillowPhotoSanitizer
 from app.services.application_service import (
-    MAX_CV_BYTES,
     ApplicationRequest,
     ApplicationService,
     InvalidApplicationInputError,
