@@ -2,7 +2,12 @@ import pytest
 
 from app.domain.cv import CV, SkillGroup
 from app.domain.job import JobOffer
-from app.services.cv_tailor import MAX_ATTEMPTS, CVTailor
+from app.services.cv_tailor import (
+    MAX_ATTEMPTS,
+    MAX_HEADLINE_CHARS,
+    CVTailor,
+    headline_from_title,
+)
 from app.services.masking_llm_provider import MaskingLLMProvider
 from app.services.tailoring_guard import TailoringViolationError
 from tests.fakes import FakeLLMProvider, SequenceLLMProvider
@@ -57,7 +62,7 @@ def test_retries_with_the_violations_as_feedback() -> None:
 
     result = CVTailor(provider).tailor(make_cv(), make_offer())
 
-    assert result == make_cv()
+    assert result.skills == make_cv().skills
     assert len(provider.calls) == 2
     assert "Kubernetes" not in provider.calls[0][1]
     assert "<problems_to_fix>" in provider.calls[1][1]
@@ -90,15 +95,51 @@ def test_contact_details_are_hidden_from_the_ai_and_restored() -> None:
     assert result.header.phone == "+00 000 000 000"
 
 
-def test_headline_must_not_echo_the_offer_title() -> None:
-    header = make_cv().header.model_copy(update={"headline": "Python Developer"})
-    echoing = make_cv().model_copy(update={"header": header})
-    provider = SequenceLLMProvider([echoing, make_cv()])
+def test_the_headline_becomes_the_job_title_of_the_offer() -> None:
+    result = CVTailor(FakeLLMProvider(make_cv())).tailor(make_cv(), make_offer())
 
-    result = CVTailor(provider).tailor(make_cv(), make_offer())
+    assert result.header.headline == "Python Developer"
 
-    assert result == make_cv()
-    assert "must describe the candidate" in provider.calls[1][1]
+
+def test_an_offer_without_a_title_keeps_the_headline_of_the_ai() -> None:
+    offer = make_offer().model_copy(update={"title": "  "})
+
+    result = CVTailor(FakeLLMProvider(make_cv())).tailor(make_cv(), offer)
+
+    assert result.header.headline == make_cv().header.headline
+
+
+def test_a_title_with_numbers_does_not_break_the_number_check() -> None:
+    offer = make_offer().model_copy(update={"title": "Java 21 Developer"})
+    provider = FakeLLMProvider(make_cv())
+
+    result = CVTailor(provider).tailor(make_cv(), offer)
+
+    assert result.header.headline == "Java 21 Developer"
+
+
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Stagiaire DataLab (H/F)", "Stagiaire DataLab"),
+        ("Data Scientist - F/H", "Data Scientist"),
+        ("Softwareentwickler (m/w/d)", "Softwareentwickler"),
+        ("Backend Engineer [f/m/d] - Berlin", "Backend Engineer - Berlin"),
+        ("Product Designer (all genders)", "Product Designer"),
+        ("  Ingénieur   DevOps  ", "Ingénieur DevOps"),
+        ("مهندس برمجيات", "مهندس برمجيات"),
+        ("Head of Machine Learning", "Head of Machine Learning"),
+    ],
+)
+def test_the_job_title_is_cleaned_for_a_cv(title: str, expected: str) -> None:
+    assert headline_from_title(title) == expected
+
+
+def test_a_very_long_title_is_cut_between_two_words() -> None:
+    headline = headline_from_title("Engineer " * 20)
+
+    assert len(headline) <= MAX_HEADLINE_CHARS
+    assert headline.endswith("Engineer")
 
 
 def offer_with_keywords(keywords: list[str]) -> JobOffer:
@@ -118,7 +159,7 @@ def test_dropping_a_more_relevant_project_is_rejected() -> None:
 
     result = CVTailor(provider).tailor(original, offer_with_keywords(["Spring Boot"]))
 
-    assert result == original
+    assert result.projects == original.projects
     assert "fits the offer better" in provider.calls[1][1]
 
 

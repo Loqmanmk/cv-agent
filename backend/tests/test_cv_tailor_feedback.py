@@ -30,7 +30,7 @@ def test_a_reworded_project_title_gets_a_clear_message_without_dropped_noise() -
 
     result = CVTailor(provider).tailor(original, offer_with_keywords(["Spring Boot"]))
 
-    assert result == original
+    assert result.projects == original.projects
     feedback = provider.calls[1][1]
     assert "copy a title exactly" in feedback
     assert "fits the offer better" not in feedback
