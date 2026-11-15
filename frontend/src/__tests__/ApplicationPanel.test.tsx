@@ -86,9 +86,9 @@ describe("ApplicationPanel", () => {
     const cvLink = screen.getByRole("link", { name: "Download CV (PDF)" });
     const letterLink = screen.getByRole("link", { name: "Download cover letter (PDF)" });
     expect(cvLink).toHaveAttribute("href", "blob:cv");
-    expect(cvLink).toHaveAttribute("download", "cv-coface.pdf");
+    expect(cvLink).toHaveAttribute("download", "CV_Jane_Doe.pdf");
     expect(letterLink).toHaveAttribute("href", "blob:letter");
-    expect(letterLink).toHaveAttribute("download", "lettre-coface.pdf");
+    expect(letterLink).toHaveAttribute("download", "Lettre_de_motivation_Jane_Doe.pdf");
   });
 
   it("shows the review screen with the tailored text", async () => {

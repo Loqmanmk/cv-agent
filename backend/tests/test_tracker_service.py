@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import replace
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from sqlalchemy import Engine
@@ -15,8 +15,8 @@ from app.services.tracker_service import (
     MAX_TITLE_CHARS,
     SaveRequest,
     TrackerService,
-    pdf_filename,
-    slug,
+    document_filename,
+    name_part,
 )
 from tests.db_helpers import add_user
 from tests.test_application_service import FAKE_PDF, FakeConverter
@@ -208,12 +208,38 @@ def test_another_user_cannot_read_or_change_an_application(
         service.delete(stranger, saved.id)
 
 
-def test_slug_makes_a_safe_file_name_part() -> None:
-    assert slug("Société Générale & Co.") == "societe-generale-co"
-    assert slug('Evil"; filename="x') == "evil-filename-x"
-    assert slug("") == "application"
-    assert slug("شركة") == "application"
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("Loqman MAKOURI", "Loqman_Makouri"),
+        ("  jean-pierre   dupont ", "Jean_Pierre_Dupont"),
+        ("Hélène Müller", "Helene_Muller"),
+        ("Ronald McDonald", "Ronald_McDonald"),
+        ('Evil"; filename="x', "Evil_Filename_X"),
+        ("لقمان", ""),
+        ("", ""),
+    ],
+)
+def test_name_part_makes_a_safe_name(name: str, expected: str) -> None:
+    assert name_part(name) == expected
 
 
-def test_pdf_filename() -> None:
-    assert pdf_filename("cv", "Coface") == "cv-coface.pdf"
+@pytest.mark.parametrize(
+    ("kind", "language", "expected"),
+    [
+        ("cv", "fr", "CV_Loqman_Makouri.pdf"),
+        ("cv", "de", "CV_Loqman_Makouri.pdf"),
+        ("letter", "fr", "Lettre_de_motivation_Loqman_Makouri.pdf"),
+        ("letter", "de", "Anschreiben_Loqman_Makouri.pdf"),
+        ("letter", "en", "Cover_Letter_Loqman_Makouri.pdf"),
+        ("letter", "ar", "Cover_Letter_Loqman_Makouri.pdf"),
+    ],
+)
+def test_document_filename_uses_the_name_of_the_person(
+    kind: Literal["cv", "letter"], language: str, expected: str
+) -> None:
+    assert document_filename(kind, "Loqman MAKOURI", language) == expected
+
+
+def test_a_name_without_latin_letters_keeps_a_clean_file_name() -> None:
+    assert document_filename("cv", "لقمان", "ar") == "CV.pdf"

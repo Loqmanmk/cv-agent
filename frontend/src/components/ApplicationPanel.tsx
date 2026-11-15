@@ -6,7 +6,7 @@ import { ApplicationForm, type ApplicationFormValues } from "@/components/Applic
 import { ErrorHint } from "@/components/ErrorHint";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import { ApiError, createApplication, renderDocuments, type ApplicationResult } from "@/lib/api";
-import { base64ToPdfBlob, fileSlug } from "@/lib/pdf";
+import { base64ToPdfBlob, documentFileName } from "@/lib/pdf";
 import { saveApplication } from "@/lib/trackerApi";
 
 const CREATE_TIMEOUT_MS = 420_000;
@@ -232,14 +232,22 @@ export function ApplicationPanel({ onCreated }: Props = {}) {
             <div className="mt-3 flex flex-wrap gap-4">
               <a
                 href={state.cvUrl}
-                download={`cv-${fileSlug(state.result.company)}.pdf`}
+                download={documentFileName(
+                  "cv",
+                  state.result.cv.header.name,
+                  state.result.language,
+                )}
                 className="font-medium underline"
               >
                 Download CV (PDF)
               </a>
               <a
                 href={state.letterUrl}
-                download={`lettre-${fileSlug(state.result.company)}.pdf`}
+                download={documentFileName(
+                  "letter",
+                  state.result.cv.header.name,
+                  state.result.language,
+                )}
                 className="font-medium underline"
               >
                 Download cover letter (PDF)

@@ -98,17 +98,21 @@ def test_updates_the_status_and_the_notes(clean_engine: Engine, owner: uuid.UUID
     assert (response.json()["status"], response.json()["notes"]) == ("interview", "Monday 10:00")
 
 
-def test_downloads_both_pdfs_with_a_safe_file_name(clean_engine: Engine, owner: uuid.UUID) -> None:
+def test_downloads_both_pdfs_named_after_the_person(clean_engine: Engine, owner: uuid.UUID) -> None:
     client = make_client(clean_engine, owner)
-    application_id = save(client, company='Evil"; x=1').json()["id"]
+    stored_cv = make_cv().model_dump()
+    stored_cv["header"]["name"] = 'Jane "Evil"; x=1 DOE'
+    application_id = save(client, company="Coface", cv=stored_cv).json()["id"]
 
     cv = client.get(f"/tracker/applications/{application_id}/cv.pdf")
     letter = client.get(f"/tracker/applications/{application_id}/letter.pdf")
 
     assert cv.content == FAKE_PDF
     assert cv.headers["content-type"] == "application/pdf"
-    assert cv.headers["content-disposition"] == 'attachment; filename="cv-evil-x-1.pdf"'
-    assert letter.headers["content-disposition"] == 'attachment; filename="letter-evil-x-1.pdf"'
+    assert cv.headers["content-disposition"] == 'attachment; filename="CV_Jane_Evil_X_1_Doe.pdf"'
+    assert letter.headers["content-disposition"] == (
+        'attachment; filename="Lettre_de_motivation_Jane_Evil_X_1_Doe.pdf"'
+    )
 
 
 def test_deletes_an_application(clean_engine: Engine, owner: uuid.UUID) -> None:

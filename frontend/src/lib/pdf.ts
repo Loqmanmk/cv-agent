@@ -7,14 +7,31 @@ export function base64ToPdfBlob(base64: string): Blob {
   return new Blob([bytes], { type: "application/pdf" });
 }
 
-export function fileSlug(text: string): string {
-  const slug = text
-    .normalize("NFD")
+export type DocumentKind = "cv" | "letter";
+
+const LETTER_PREFIXES: Record<string, string> = { fr: "Lettre_de_motivation", de: "Anschreiben" };
+const DEFAULT_LETTER_PREFIX = "Cover_Letter";
+
+function capitalize(word: string): string {
+  return word === word.toUpperCase()
+    ? word.charAt(0) + word.slice(1).toLowerCase()
+    : word.charAt(0).toUpperCase() + word.slice(1);
+}
+
+/** "Loqman MAKOURI" -> "Loqman_Makouri". Only ASCII letters and digits are kept. */
+export function namePart(fullName: string): string {
+  const ascii = fullName
+    .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "application";
+    .replace(/[^\x00-\x7F]/g, "");
+  return (ascii.match(/[A-Za-z0-9]+/g) ?? []).map(capitalize).join("_");
+}
+
+/** CV_Loqman_Makouri.pdf, Lettre_de_motivation_Loqman_Makouri.pdf, Cover_Letter_....pdf */
+export function documentFileName(kind: DocumentKind, fullName: string, language: string): string {
+  const prefix = kind === "cv" ? "CV" : (LETTER_PREFIXES[language] ?? DEFAULT_LETTER_PREFIX);
+  const name = namePart(fullName);
+  return name ? `${prefix}_${name}.pdf` : `${prefix}.pdf`;
 }
 
 export function imageDataUri(base64: string): string {

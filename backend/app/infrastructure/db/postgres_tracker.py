@@ -65,6 +65,17 @@ def _owned(user_id: uuid.UUID, application_id: int) -> tuple[Any, Any]:
     )
 
 
+def _applicant_name(cv_json: object) -> str:
+    """The name written at the top of the stored CV, or "" when there is none."""
+    if isinstance(cv_json, dict):
+        header = cv_json.get("header")
+        if isinstance(header, dict):
+            name = header.get("name")
+            if isinstance(name, str):
+                return name
+    return ""
+
+
 class PostgresApplicationRepository(ApplicationRepository):
     """Stores the applications in PostgreSQL. Every query is limited to the owner."""
 
@@ -148,11 +159,15 @@ class PostgresApplicationRepository(ApplicationRepository):
             raise ApplicationNotFoundError
 
     def files(self, user_id: uuid.UUID, application_id: int) -> ApplicationFiles:
-        statement = select(ApplicationRecord.cv_pdf, ApplicationRecord.letter_pdf).where(
-            *_owned(user_id, application_id)
-        )
+        statement = select(
+            ApplicationRecord.cv_pdf, ApplicationRecord.letter_pdf, ApplicationRecord.cv_json
+        ).where(*_owned(user_id, application_id))
         with self._sessions.begin() as session:
             row = session.execute(statement).one_or_none()
         if row is None:
             raise ApplicationNotFoundError
-        return ApplicationFiles(cv_pdf=bytes(row.cv_pdf), letter_pdf=bytes(row.letter_pdf))
+        return ApplicationFiles(
+            cv_pdf=bytes(row.cv_pdf),
+            letter_pdf=bytes(row.letter_pdf),
+            applicant_name=_applicant_name(row.cv_json),
+        )

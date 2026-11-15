@@ -14,7 +14,7 @@ from app.api.tracker_schemas import (
 )
 from app.domain.document import InvalidPhotoError
 from app.domain.tracker import ApplicationSummary
-from app.services.tracker_service import SaveRequest, TrackerService, pdf_filename
+from app.services.tracker_service import SaveRequest, TrackerService, document_filename
 
 router = APIRouter(prefix="/tracker")
 
@@ -108,7 +108,8 @@ def delete_application(
 @router.get("/applications/{application_id}/cv.pdf")
 def download_cv(application_id: ApplicationId, service: Service, user_id: CurrentUser) -> Response:
     summary = service.get(user_id, application_id)
-    return _pdf(service.files(user_id, application_id).cv_pdf, pdf_filename("cv", summary.company))
+    files = service.files(user_id, application_id)
+    return _pdf(files.cv_pdf, document_filename("cv", files.applicant_name, summary.language))
 
 
 @router.get("/applications/{application_id}/letter.pdf")
@@ -116,5 +117,6 @@ def download_letter(
     application_id: ApplicationId, service: Service, user_id: CurrentUser
 ) -> Response:
     summary = service.get(user_id, application_id)
-    filename = pdf_filename("letter", summary.company)
-    return _pdf(service.files(user_id, application_id).letter_pdf, filename)
+    files = service.files(user_id, application_id)
+    filename = document_filename("letter", files.applicant_name, summary.language)
+    return _pdf(files.letter_pdf, filename)

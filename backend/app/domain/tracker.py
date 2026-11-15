@@ -50,6 +50,7 @@ class ApplicationSummary:
 class ApplicationFiles:
     cv_pdf: bytes
     letter_pdf: bytes
+    applicant_name: str = ""
 
 
 class ApplicationRepository(ABC):

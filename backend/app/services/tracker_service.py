@@ -2,6 +2,7 @@ import re
 import unicodedata
 import uuid
 from dataclasses import dataclass
+from typing import Literal
 from urllib.parse import urlsplit
 
 from app.domain.cv import CV
@@ -36,14 +37,28 @@ class SaveRequest:
     photo_bytes: bytes | None = None
 
 
-def slug(text: str) -> str:
-    """A safe ASCII file name part."""
-    ascii_text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
-    return re.sub(r"[^a-z0-9]+", "-", ascii_text.lower()).strip("-") or "application"
+DocumentKind = Literal["cv", "letter"]
+LETTER_PREFIXES = {"fr": "Lettre_de_motivation", "de": "Anschreiben"}
+DEFAULT_LETTER_PREFIX = "Cover_Letter"
 
 
-def pdf_filename(kind: str, company: str) -> str:
-    return f"{kind}-{slug(company)}.pdf"
+def name_part(full_name: str) -> str:
+    """The person's name as a safe file name part: "Loqman MAKOURI" -> "Loqman_Makouri".
+
+    Only ASCII letters and digits are kept, so the name is safe in any download header.
+    """
+    ascii_text = unicodedata.normalize("NFKD", full_name).encode("ascii", "ignore").decode("ascii")
+    words = re.findall(r"[A-Za-z0-9]+", ascii_text)
+    return "_".join(
+        word.capitalize() if word.isupper() else word[:1].upper() + word[1:] for word in words
+    )
+
+
+def document_filename(kind: DocumentKind, applicant_name: str, language: str) -> str:
+    """CV_Loqman_Makouri.pdf, Lettre_de_motivation_Loqman_Makouri.pdf, Cover_Letter_....pdf"""
+    prefix = "CV" if kind == "cv" else LETTER_PREFIXES.get(language, DEFAULT_LETTER_PREFIX)
+    name = name_part(applicant_name)
+    return f"{prefix}_{name}.pdf" if name else f"{prefix}.pdf"
 
 
 def _one_line(value: str, limit: int, label: str, required: bool = False) -> str:

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { base64ToPdfBlob, fileSlug } from "@/lib/pdf";
+import { base64ToPdfBlob, documentFileName, namePart } from "@/lib/pdf";
 
 describe("base64ToPdfBlob", () => {
   it("creates a PDF blob with the decoded size", () => {
@@ -11,14 +11,31 @@ describe("base64ToPdfBlob", () => {
   });
 });
 
-describe("fileSlug", () => {
-  it("makes a safe file name part", () => {
-    expect(fileSlug("Coface")).toBe("coface");
-    expect(fileSlug("Société Générale & Co.")).toBe("societe-generale-co");
+describe("namePart", () => {
+  it.each([
+    ["Loqman MAKOURI", "Loqman_Makouri"],
+    ["  jean-pierre   dupont ", "Jean_Pierre_Dupont"],
+    ["Hélène Müller", "Helene_Muller"],
+    ["Ronald McDonald", "Ronald_McDonald"],
+    ['Evil"; filename="x', "Evil_Filename_X"],
+    ["لقمان", ""],
+  ])("turns %j into %j", (name, expected) => {
+    expect(namePart(name)).toBe(expected);
+  });
+});
+
+describe("documentFileName", () => {
+  it.each([
+    ["cv", "fr", "CV_Loqman_Makouri.pdf"],
+    ["letter", "fr", "Lettre_de_motivation_Loqman_Makouri.pdf"],
+    ["letter", "de", "Anschreiben_Loqman_Makouri.pdf"],
+    ["letter", "en", "Cover_Letter_Loqman_Makouri.pdf"],
+    ["letter", "ar", "Cover_Letter_Loqman_Makouri.pdf"],
+  ] as const)("names a %s in %s as %s", (kind, language, expected) => {
+    expect(documentFileName(kind, "Loqman MAKOURI", language)).toBe(expected);
   });
 
-  it("never returns an empty name", () => {
-    expect(fileSlug("")).toBe("application");
-    expect(fileSlug("???")).toBe("application");
+  it("keeps a clean name when the name has no Latin letters", () => {
+    expect(documentFileName("cv", "لقمان", "ar")).toBe("CV.pdf");
   });
 });

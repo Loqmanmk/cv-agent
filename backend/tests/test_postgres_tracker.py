@@ -17,7 +17,7 @@ def make_new(title: str = "Developer", company: str = "Acme") -> NewApplication:
         language="fr",
         source_url="https://example.com/job",
         status="saved",
-        cv_json='{"profile": "Hello"}',
+        cv_json='{"header": {"name": "Jane Doe"}, "profile": "Hello"}',
         letter_json='{"subject": "Hi"}',
         photo=b"photo",
         cv_pdf=b"%PDF-cv",
@@ -122,6 +122,7 @@ def test_returns_the_stored_pdfs(
     files = repository.files(owner, added.id)
 
     assert (files.cv_pdf, files.letter_pdf) == (b"%PDF-cv", b"%PDF-letter")
+    assert files.applicant_name == "Jane Doe"
 
 
 def test_unknown_applications_are_reported(
