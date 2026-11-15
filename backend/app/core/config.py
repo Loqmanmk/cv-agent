@@ -25,6 +25,14 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     registration_open: bool = False
     email_outbox_dir: str = "../data/outbox"
+    email_backend: str = "outbox"
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_security: str = "starttls"
+    smtp_username: str = ""
+    smtp_password: SecretStr | None = None
+    email_from_address: str = ""
+    email_from_name: str = "CV Agent"
     app_base_url: str = "http://localhost:3000"
     google_client_id: str = ""
     google_client_secret: SecretStr | None = None

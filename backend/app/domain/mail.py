@@ -20,3 +20,7 @@ class EmailSender(ABC):
 
     @abstractmethod
     def send(self, message: EmailMessage) -> None: ...
+
+
+class EmailDeliveryError(Exception):
+    """Raised when an email could not be handed to the provider. The message holds no address."""

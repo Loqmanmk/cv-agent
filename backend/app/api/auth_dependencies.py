@@ -1,7 +1,6 @@
 import math
 import uuid
 from functools import lru_cache
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
@@ -16,7 +15,7 @@ from app.infrastructure.argon2_hasher import Argon2PasswordHasher
 from app.infrastructure.db.postgres_email_tokens import PostgresEmailTokenRepository
 from app.infrastructure.db.postgres_sessions import PostgresSessionRepository
 from app.infrastructure.db.postgres_users import PostgresUserRepository
-from app.infrastructure.outbox_sender import OutboxEmailSender
+from app.infrastructure.email_factory import build_email_sender
 from app.services.account_service import AccountService
 from app.services.email_token_service import EmailTokenService
 from app.services.email_verification import VerificationService
@@ -50,7 +49,7 @@ def get_session_service() -> SessionService:
 
 @lru_cache
 def get_email_sender() -> EmailSender:
-    return OutboxEmailSender(Path(get_settings().email_outbox_dir))
+    return build_email_sender(get_settings())
 
 
 @lru_cache
