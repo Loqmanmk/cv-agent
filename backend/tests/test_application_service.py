@@ -287,6 +287,40 @@ def test_no_translation_when_the_cv_is_already_in_the_offer_language() -> None:
     assert len(provider.calls) == 4
 
 
+def docx_with(text: str) -> bytes:
+    document = Document()
+    for line in (*CV_LINES, text):
+        document.add_paragraph(line)
+    buffer = BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
+def test_a_cv_written_in_the_offer_language_is_not_translated_whatever_the_profile_says() -> None:
+    from tests.test_language_detector import ENGLISH
+
+    answers: list[BaseModel] = [make_offer("en"), make_cv(), make_cv(), make_body()]
+    service, provider, _ = make_service(answers)
+
+    service.create(make_request(content=docx_with(ENGLISH), cv_language="fr"))
+
+    assert len(provider.calls) == 4
+
+
+def test_a_cv_in_another_language_than_the_profile_says_is_translated() -> None:
+    from tests.test_language_detector import FRENCH
+    from tests.test_translation_guard import german
+
+    translated = german(make_cv())
+    answers: list[BaseModel] = [make_offer("de"), make_cv(), translated, translated, make_body()]
+    service, provider, _ = make_service(answers)
+
+    service.create(make_request(content=docx_with(FRENCH), cv_language="de"))
+
+    assert len(provider.calls) == 5
+    assert "German" in provider.calls[2][0]
+
+
 def test_a_translation_that_breaks_the_guard_stops_the_pipeline() -> None:
     from app.services.translation_guard import TranslationViolationError
 

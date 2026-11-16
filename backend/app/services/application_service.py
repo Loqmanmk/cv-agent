@@ -22,6 +22,7 @@ from app.services.cv_tailor import CVTailor
 from app.services.cv_translator import CVTranslator
 from app.services.document_renderer import CVHtmlRenderer, DocumentRenderer, LetterHtmlRenderer
 from app.services.job_analyzer import JobAnalyzer
+from app.services.language_detector import detect_language
 from app.services.letter_assembler import LetterAssembler
 from app.services.letter_conventions import conventions_for
 from app.services.letter_writer import LetterWriter
@@ -110,8 +111,11 @@ class ApplicationService:
         conventions_for(offer.language)  # fail early, before spending more AI calls
         logger.info("stage: structuring the CV")
         cv = CVStructurer(self._private_llm).structure(parsed.text)
-        if request.cv_language != offer.language:
-            logger.info("stage: translating the CV to %s", offer.language)
+        # The language the CV is really written in wins over the setting of the profile, so a
+        # CV already in the language of the offer is never sent to a pointless translation.
+        cv_language = detect_language(parsed.text) or request.cv_language
+        if cv_language != offer.language:
+            logger.info("stage: translating the CV from %s to %s", cv_language, offer.language)
             cv = CVTranslator(self._private_llm).translate(cv, offer.language)
         logger.info("stage: tailoring the CV")
         tailored = CVTailor(self._private_llm).tailor(cv, offer)

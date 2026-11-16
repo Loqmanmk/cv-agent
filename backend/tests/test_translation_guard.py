@@ -239,10 +239,31 @@ def test_an_untranslated_profile_is_rejected() -> None:
 def test_an_unchanged_cv_is_rejected_as_not_translated() -> None:
     found = violations_of(make_cv())
 
-    assert "headline was not translated" in found
-    assert "target line was not translated" in found
     assert "profile was not translated" in found
     assert "most bullets were not translated" in found
+
+
+def test_a_headline_that_is_the_same_in_both_languages_is_accepted() -> None:
+    original = make_cv().model_copy(
+        update={"header": make_cv().header.model_copy(update={"headline": "Data Scientist"})}
+    )
+    translated = german(make_cv())
+    translated = translated.model_copy(
+        update={"header": translated.header.model_copy(update={"headline": "Data Scientist"})}
+    )
+
+    assert violations_of(translated, original=original) == []
+
+
+def test_text_already_in_the_target_language_counts_as_translated() -> None:
+    english = (
+        "Fifth-year engineering student with a strong interest in data and the cloud, "
+        "looking for an internship to build reliable systems with my team."
+    )
+    original = make_cv().model_copy(update={"profile": english})
+    translated = german(make_cv()).model_copy(update={"profile": english})
+
+    assert violations_of(translated, "en", original) == []
 
 
 def test_arabic_must_contain_arabic_letters() -> None:

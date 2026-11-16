@@ -1,6 +1,7 @@
 import re
 
 from app.domain.cv import CV
+from app.services.language_detector import detect_language
 from app.services.tailoring_guard import numbers_in, project_name
 
 LOCKED_HEADER_FIELDS = ("name", "phone", "email", "linkedin", "github")
@@ -228,17 +229,24 @@ def _pair_violations(pairs: list[Pair]) -> list[str]:
 
 
 def _is_translated(before: str, after: str, language: str) -> bool:
+    """Changed text, or text that is already written in the target language."""
     if language == "ar":
         return ARABIC_LETTER.search(after) is not None
-    return before.strip().casefold() != after.strip().casefold()
+    if before.strip().casefold() != after.strip().casefold():
+        return True
+    return detect_language(after) == language
 
 
 def _translation_violations(original: CV, translated: CV, language: str) -> list[str]:
-    key_texts = [
-        ("headline", original.header.headline, translated.header.headline),
-        ("target line", original.header.target_line, translated.header.target_line),
-        ("profile", original.profile, translated.profile),
-    ]
+    # A short headline such as "Data Scientist" is often the same in both languages, so only
+    # the Arabic script is checked for it. The profile and the bullets show a real translation.
+    key_texts = [("profile", original.profile, translated.profile)]
+    if language == "ar":
+        key_texts = [
+            ("headline", original.header.headline, translated.header.headline),
+            ("target line", original.header.target_line, translated.header.target_line),
+            *key_texts,
+        ]
     found = [
         f"{label} was not translated"
         for label, before, after in key_texts
