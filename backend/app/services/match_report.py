@@ -91,8 +91,7 @@ def _changes(original: CV, tailored: CV) -> list[str]:
     found: list[str] = []
     if original.header.headline != tailored.header.headline:
         found.append(
-            f'Headline set to the job title "{tailored.header.headline}" '
-            f'(was "{original.header.headline}").'
+            f'Headline changed to "{tailored.header.headline}" (was "{original.header.headline}").'
         )
     if original.header.target_line != tailored.header.target_line:
         found.append("Target line rewritten for this offer.")

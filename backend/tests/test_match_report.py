@@ -83,9 +83,7 @@ def test_every_kind_of_change_is_reported() -> None:
     changes = build_match_report(original, tailored, make_offer([])).changes
 
     text = "\n".join(changes)
-    assert (
-        f'Headline set to the job title "Data Engineer" (was "{original.header.headline}")' in text
-    )
+    assert f'Headline changed to "Data Engineer" (was "{original.header.headline}")' in text
     assert "Target line rewritten" in text
     assert "Profile rewritten" in text
     assert f"{experience.title} ({experience.company}): 1 bullet reworded" in text
