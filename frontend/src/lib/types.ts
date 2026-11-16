@@ -61,6 +61,15 @@ export type Cv = {
   interests: string[];
 };
 
+export type MissingSkill = { name: string; required: boolean };
+
+/** How the tailored CV matches the offer. Computed by the server, not written by the AI. */
+export type MatchReport = {
+  matchedSkills: string[];
+  missingSkills: MissingSkill[];
+  changes: string[];
+};
+
 export type CoverLetter = {
   sender: { name: string; address: string; email: string; phone: string };
   recipient: { contact: string; company: string; address: string };

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import type { ApplicationResult } from "@/lib/api";
 
-import { makeCv, makeLetter } from "./fixtures";
+import { makeCv, makeLetter, makeReport } from "./fixtures";
 
 function setup() {
   const onRegenerate = vi.fn();
@@ -21,6 +21,7 @@ function setup() {
     cv: makeCv(),
     letter: makeLetter(),
     photoBase64: null,
+    report: makeReport(),
   };
   render(<ReviewEditor result={result} busy={false} error={null} onRegenerate={onRegenerate} />);
   return { onRegenerate, user };

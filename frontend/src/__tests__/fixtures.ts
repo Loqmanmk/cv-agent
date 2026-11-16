@@ -1,4 +1,16 @@
-import type { CoverLetter, Cv } from "@/lib/types";
+import type { CoverLetter, Cv, MatchReport } from "@/lib/types";
+
+export function makeReport(overrides: Partial<MatchReport> = {}): MatchReport {
+  return {
+    matchedSkills: ["Python"],
+    missingSkills: [
+      { name: "Kubernetes", required: true },
+      { name: "Terraform", required: false },
+    ],
+    changes: ["Profile rewritten with the words of the offer."],
+    ...overrides,
+  };
+}
 
 export function makeCv(overrides: Partial<Cv> = {}): Cv {
   return {
@@ -79,6 +91,14 @@ export function makeResultBody(overrides: Record<string, unknown> = {}) {
     cv: makeCv({ profile: "Tailored profile." }),
     letter: makeLetter(),
     photo_base64: "iVBORw0KGgo=",
+    report: {
+      matched_skills: ["Python"],
+      missing_skills: [
+        { name: "Kubernetes", required: true },
+        { name: "Terraform", required: false },
+      ],
+      changes: ["Profile rewritten with the words of the offer."],
+    },
     ...overrides,
   };
 }

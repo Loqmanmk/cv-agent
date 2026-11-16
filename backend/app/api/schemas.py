@@ -5,6 +5,17 @@ from app.domain.job import OfferLanguage
 from app.domain.letter import CoverLetter
 
 
+class MissingSkillOut(BaseModel):
+    name: str
+    required: bool
+
+
+class MatchReportOut(BaseModel):
+    matched_skills: list[str]
+    missing_skills: list[MissingSkillOut]
+    changes: list[str]
+
+
 class ApplicationResponse(BaseModel):
     job_title: str
     company: str
@@ -16,6 +27,7 @@ class ApplicationResponse(BaseModel):
     cv: CV
     letter: CoverLetter
     photo_base64: str | None
+    report: MatchReportOut
 
 
 class RenderRequestBody(BaseModel):

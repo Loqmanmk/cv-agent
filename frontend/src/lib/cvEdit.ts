@@ -19,6 +19,47 @@ export function fromSkillDrafts(drafts: SkillDraft[]): SkillGroup[] {
     .filter((group) => group.items.length > 0);
 }
 
+// The group that receives the skills the user adds from the offer, in the language of the CV.
+const ADDED_SKILLS_GROUP: Record<string, string> = {
+  fr: "Autres compétences",
+  en: "Other skills",
+  de: "Weitere Kenntnisse",
+  ar: "مهارات أخرى",
+};
+
+export function addedSkillsGroup(language: string): string {
+  return ADDED_SKILLS_GROUP[language] ?? ADDED_SKILLS_GROUP.en;
+}
+
+function sameSkill(a: string, b: string): boolean {
+  return a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
+}
+
+export function hasSkill(drafts: SkillDraft[], name: string): boolean {
+  return drafts.some((draft) => parseItems(draft.items).some((item) => sameSkill(item, name)));
+}
+
+/** Adds a skill to the group of added skills, creating the group when needed. */
+export function addSkill(drafts: SkillDraft[], name: string, language: string): SkillDraft[] {
+  if (hasSkill(drafts, name)) return drafts;
+  const category = addedSkillsGroup(language);
+  const index = drafts.findIndex((draft) => draft.category.trim() === category);
+  if (index === -1) return [...drafts, { category, items: name }];
+  return drafts.map((draft, position) =>
+    position === index ? { ...draft, items: [...parseItems(draft.items), name].join(", ") } : draft,
+  );
+}
+
+/** Removes a skill from every group. A group left empty disappears from the CV. */
+export function removeSkill(drafts: SkillDraft[], name: string): SkillDraft[] {
+  return drafts.map((draft) => ({
+    ...draft,
+    items: parseItems(draft.items)
+      .filter((item) => !sameSkill(item, name))
+      .join(", "),
+  }));
+}
+
 export function findProblems(drafts: SkillDraft[]): string[] {
   const unnamed = drafts.some(
     (draft) => draft.category.trim() === "" && parseItems(draft.items).length > 0,

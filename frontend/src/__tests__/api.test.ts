@@ -94,6 +94,39 @@ describe("createApplication", () => {
       cv: body.cv,
       letter: body.letter,
       photoBase64: body.photo_base64,
+      report: {
+        matchedSkills: ["Python"],
+        missingSkills: [
+          { name: "Kubernetes", required: true },
+          { name: "Terraform", required: false },
+        ],
+        changes: ["Profile rewritten with the words of the offer."],
+      },
+    });
+  });
+
+  it("keeps only the valid parts of the match report", async () => {
+    const report = {
+      matched_skills: ["Python", 3],
+      missing_skills: [{ name: "Go", required: true }, { name: "Rust" }, "Kotlin"],
+      changes: "not a list",
+    };
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody({ report })));
+
+    expect((await createApplication(values)).report).toEqual({
+      matchedSkills: ["Python"],
+      missingSkills: [{ name: "Go", required: true }],
+      changes: [],
+    });
+  });
+
+  it("shows no report when the server sends none", async () => {
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody({ report: undefined })));
+
+    expect((await createApplication(values)).report).toEqual({
+      matchedSkills: [],
+      missingSkills: [],
+      changes: [],
     });
   });
 

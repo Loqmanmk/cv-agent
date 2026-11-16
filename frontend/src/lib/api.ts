@@ -1,5 +1,5 @@
 import { getCsrfToken, notifyUnauthorized, SAFE_METHODS } from "@/lib/session";
-import type { CoverLetter, Cv } from "@/lib/types";
+import type { CoverLetter, Cv, MatchReport, MissingSkill } from "@/lib/types";
 
 export type ApplicationRequestValues = {
   /** null: the server uses the CV saved on the account. */
@@ -19,6 +19,7 @@ export type ApplicationResult = {
   cv: Cv;
   letter: CoverLetter;
   photoBase64: string | null;
+  report: MatchReport;
 };
 
 export type RenderRequestValues = {
@@ -106,6 +107,31 @@ function isResultBody(body: unknown): body is ResultBody {
     isObject(body.letter) &&
     (body.photo_base64 === null || typeof body.photo_base64 === "string")
   );
+}
+
+const EMPTY_REPORT: MatchReport = { matchedSkills: [], missingSkills: [], changes: [] };
+
+function strings(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function isMissingSkill(value: unknown): value is MissingSkill {
+  return isObject(value) && typeof value.name === "string" && typeof value.required === "boolean";
+}
+
+/** The report of the server. A missing or broken report only hides the report. */
+function toReport(value: unknown): MatchReport {
+  if (!isObject(value)) return EMPTY_REPORT;
+  const missing = Array.isArray(value.missing_skills) ? value.missing_skills : [];
+  return {
+    matchedSkills: strings(value.matched_skills),
+    missingSkills: missing
+      .filter(isMissingSkill)
+      .map((skill) => ({ name: skill.name, required: skill.required })),
+    changes: strings(value.changes),
+  };
 }
 
 function isRenderBody(body: unknown): body is RenderBody {
@@ -230,6 +256,7 @@ export async function createApplication(
     cv: data.cv,
     letter: data.letter,
     photoBase64: data.photo_base64,
+    report: toReport((data as Record<string, unknown>).report),
   };
 }
 

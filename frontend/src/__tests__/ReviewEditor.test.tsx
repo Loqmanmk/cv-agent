@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import type { ApplicationResult } from "@/lib/api";
 
-import { makeCv, makeLetter } from "./fixtures";
+import { makeCv, makeLetter, makeReport } from "./fixtures";
 
 function makeResult(overrides: Partial<ApplicationResult> = {}): ApplicationResult {
   return {
@@ -19,6 +19,7 @@ function makeResult(overrides: Partial<ApplicationResult> = {}): ApplicationResu
     cv: makeCv({ profile: "Tailored profile." }),
     letter: makeLetter(),
     photoBase64: "iVBORw0KGgo=",
+    report: makeReport(),
     ...overrides,
   };
 }

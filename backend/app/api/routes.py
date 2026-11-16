@@ -22,6 +22,8 @@ from app.api.schemas import (
     ApplicationResponse,
     JobTextResponse,
     JobUrlRequest,
+    MatchReportOut,
+    MissingSkillOut,
     RenderRequestBody,
     RenderResponse,
 )
@@ -105,6 +107,14 @@ def create_application(
         cv=result.cv,
         letter=result.letter,
         photo_base64=_encode(result.photo.data) if result.photo else None,
+        report=MatchReportOut(
+            matched_skills=result.report.matched_skills,
+            missing_skills=[
+                MissingSkillOut(name=skill.name, required=skill.required)
+                for skill in result.report.missing_skills
+            ],
+            changes=result.report.changes,
+        ),
     )
 
 

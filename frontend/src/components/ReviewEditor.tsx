@@ -3,12 +3,16 @@
 import { useState, type ReactNode } from "react";
 
 import { LetterHeaderEditor } from "@/components/LetterHeaderEditor";
+import { MatchReportPanel } from "@/components/MatchReportPanel";
 import type { ApplicationResult } from "@/lib/api";
 import {
+  addSkill,
   buildEditedCv,
   buildEditedLetter,
   findLetterProblems,
   findProblems,
+  hasSkill,
+  removeSkill,
   setExperienceBullet,
   setHeaderField,
   setLetterParagraph,
@@ -118,6 +122,16 @@ export function ReviewEditor({
         On the left, your original CV. On the right, the tailored text: edit anything you could not
         defend in an interview. Clear a bullet to remove it.
       </p>
+
+      <MatchReportPanel
+        report={result.report}
+        isAdded={(skill) => hasSkill(drafts, skill)}
+        onToggle={(skill, added) =>
+          setDrafts((current) =>
+            added ? addSkill(current, skill, result.language) : removeSkill(current, skill),
+          )
+        }
+      />
 
       {result.photoBase64 && (
         <div className="mt-4 flex items-center gap-3">

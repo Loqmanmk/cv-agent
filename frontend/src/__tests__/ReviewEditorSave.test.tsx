@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import type { ApplicationResult } from "@/lib/api";
 
-import { makeCv, makeLetter } from "./fixtures";
+import { makeCv, makeLetter, makeReport } from "./fixtures";
 
 const result: ApplicationResult = {
   jobTitle: "Stagiaire DataLab",
@@ -18,6 +18,7 @@ const result: ApplicationResult = {
   cv: makeCv({ profile: "Tailored profile." }),
   letter: makeLetter(),
   photoBase64: "iVBORw0KGgo=",
+  report: makeReport(),
 };
 
 type Extra = { saving?: boolean; saveMessage?: string | null; saveError?: string | null };

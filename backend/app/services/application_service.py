@@ -26,6 +26,7 @@ from app.services.letter_assembler import LetterAssembler
 from app.services.letter_conventions import conventions_for
 from app.services.letter_writer import LetterWriter
 from app.services.masking_llm_provider import MaskingLLMProvider
+from app.services.match_report import MatchReport, build_match_report
 from app.services.photo_selector import PhotoSelector
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ class ApplicationResult:
     cv_pdf: bytes
     letter_pdf: bytes
     photo: ExtractedImage | None
+    report: MatchReport
 
     @property
     def photo_used(self) -> bool:
@@ -135,6 +137,7 @@ class ApplicationService:
             cv_pdf=documents.cv_pdf,
             letter_pdf=documents.letter_pdf,
             photo=photo,
+            report=build_match_report(cv, tailored, offer),
         )
 
     def _select_photo(self, images: list[ExtractedImage], include: bool) -> ExtractedImage | None:
