@@ -2,6 +2,7 @@ from dataclasses import dataclass
 
 from app.domain.cv import CV, Experience, Project
 from app.domain.job import JobOffer
+from app.services.skill_families import group_for
 from app.services.tailoring_guard import contains_term, strings_in
 
 MAX_SKILL_CHARS = 60
@@ -13,6 +14,8 @@ class MissingSkill:
 
     name: str
     required: bool
+    # The skill group of the tailored CV it belongs in, or None to put it in a new group.
+    group: str | None = None
 
 
 @dataclass(frozen=True)
@@ -112,7 +115,9 @@ def build_match_report(original: CV, tailored: CV, offer: JobOffer) -> MatchRepo
         if contains_term(corpus, name):
             matched.append(name)
         else:
-            missing.append(MissingSkill(name=name, required=required))
+            missing.append(
+                MissingSkill(name=name, required=required, group=group_for(name, tailored.skills))
+            )
     return MatchReport(
         matched_skills=matched, missing_skills=missing, changes=_changes(original, tailored)
     )

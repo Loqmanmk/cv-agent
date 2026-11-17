@@ -97,8 +97,9 @@ describe("createApplication", () => {
       report: {
         matchedSkills: ["Python"],
         missingSkills: [
-          { name: "Kubernetes", required: true },
-          { name: "Terraform", required: false },
+          { name: "Django", required: true, group: "Back-end" },
+          { name: "Kubernetes", required: true, group: null },
+          { name: "Terraform", required: false, group: null },
         ],
         changes: ["Profile rewritten with the words of the offer."],
       },
@@ -115,7 +116,7 @@ describe("createApplication", () => {
 
     expect((await createApplication(values)).report).toEqual({
       matchedSkills: ["Python"],
-      missingSkills: [{ name: "Go", required: true }],
+      missingSkills: [{ name: "Go", required: true, group: null }],
       changes: [],
     });
   });

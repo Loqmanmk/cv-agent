@@ -127,9 +127,11 @@ function toReport(value: unknown): MatchReport {
   const missing = Array.isArray(value.missing_skills) ? value.missing_skills : [];
   return {
     matchedSkills: strings(value.matched_skills),
-    missingSkills: missing
-      .filter(isMissingSkill)
-      .map((skill) => ({ name: skill.name, required: skill.required })),
+    missingSkills: missing.filter(isMissingSkill).map((skill) => ({
+      name: skill.name,
+      required: skill.required,
+      group: typeof skill.group === "string" ? skill.group : null,
+    })),
     changes: strings(value.changes),
   };
 }

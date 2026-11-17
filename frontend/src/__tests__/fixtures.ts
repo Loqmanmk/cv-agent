@@ -4,8 +4,9 @@ export function makeReport(overrides: Partial<MatchReport> = {}): MatchReport {
   return {
     matchedSkills: ["Python"],
     missingSkills: [
-      { name: "Kubernetes", required: true },
-      { name: "Terraform", required: false },
+      { name: "Django", required: true, group: "Back-end" },
+      { name: "Kubernetes", required: true, group: null },
+      { name: "Terraform", required: false, group: null },
     ],
     changes: ["Profile rewritten with the words of the offer."],
     ...overrides,
@@ -94,7 +95,8 @@ export function makeResultBody(overrides: Record<string, unknown> = {}) {
     report: {
       matched_skills: ["Python"],
       missing_skills: [
-        { name: "Kubernetes", required: true },
+        { name: "Django", required: true, group: "Back-end" },
+        { name: "Kubernetes", required: true, group: null },
         { name: "Terraform", required: false },
       ],
       changes: ["Profile rewritten with the words of the offer."],

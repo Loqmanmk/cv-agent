@@ -60,6 +60,19 @@ describe("Match with the offer", () => {
     });
   });
 
+  it("adds a skill to the group of related skills", async () => {
+    const { onRegenerate, user } = setup();
+
+    await user.click(screen.getByLabelText(/Django/));
+    await regenerate(user);
+
+    expect(screen.getByText(/goes to Back-end/)).toBeInTheDocument();
+    expect(sentCv(onRegenerate).skills[0]).toEqual({
+      category: "Back-end",
+      items: ["Python", "FastAPI", "Django"],
+    });
+  });
+
   it("removes a skill when it is unticked", async () => {
     const { onRegenerate, user } = setup();
 

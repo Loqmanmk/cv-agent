@@ -32,6 +32,14 @@ def test_skills_already_in_the_cv_are_matched_and_the_others_listed() -> None:
     ]
 
 
+def test_a_missing_skill_names_the_group_it_belongs_in() -> None:
+    cv = make_cv()
+
+    report = build_match_report(cv, cv, make_offer(["Django", "Snowflake-like unknown"]))
+
+    assert [skill.group for skill in report.missing_skills] == ["Back-end", None]
+
+
 def test_a_skill_is_matched_wherever_the_cv_mentions_it() -> None:
     cv = make_cv().model_copy(update={"profile": "I build pipelines with Apache Airflow."})
 

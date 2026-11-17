@@ -8,6 +8,7 @@ from app.domain.letter import CoverLetter
 class MissingSkillOut(BaseModel):
     name: str
     required: bool
+    group: str | None
 
 
 class MatchReportOut(BaseModel):

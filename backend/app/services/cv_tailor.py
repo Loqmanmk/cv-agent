@@ -1,6 +1,7 @@
 from app.domain.cv import CV, Project
 from app.domain.job import JobOffer
 from app.domain.llm import LLMProvider
+from app.services.skill_focus import focus_skills
 from app.services.tailoring_guard import (
     TailoringGuard,
     TailoringViolationError,
@@ -22,6 +23,10 @@ You MAY:
 - Drop projects to save space, but keep the ones whose content best matches the offer's
   technologies. The least relevant projects go first.
 - Regroup, rename and reorder skill categories, and put the offer's skills first.
+- Keep only the skills that serve this job: leave out skills from unrelated fields (for
+  example back-end or DevOps tools for a front-end offer). Keep every skill of the CV that
+  the offer asks for, and the ones its field needs (for a back-end offer: SQL, databases,
+  APIs).
 
 You MUST NOT:
 - Add a skill, tool, technology, project or achievement that is not in the CV.
@@ -63,14 +68,18 @@ class CVTailor:
                 *self._dropped_relevant_projects(cv, tailored, offer),
             ]
             if not problems:
-                return self._with_own_headline(cv, tailored)
+                return self._finish(cv, tailored, offer)
         raise TailoringViolationError(problems)
 
     @staticmethod
-    def _with_own_headline(cv: CV, tailored: CV) -> CV:
-        """The headline stays the title written in the CV, whatever the AI answered."""
+    def _finish(cv: CV, tailored: CV, offer: JobOffer) -> CV:
+        """Rules applied by code, so they hold whatever the AI answered.
+
+        The headline stays the title written in the CV, and the skills focus on the offer.
+        """
         header = tailored.header.model_copy(update={"headline": cv.header.headline})
-        return tailored.model_copy(update={"header": header})
+        skills = focus_skills(cv, tailored, offer)
+        return tailored.model_copy(update={"header": header, "skills": skills})
 
     @staticmethod
     def _dropped_relevant_projects(cv: CV, tailored: CV, offer: JobOffer) -> list[str]:

@@ -61,7 +61,8 @@ export type Cv = {
   interests: string[];
 };
 
-export type MissingSkill = { name: string; required: boolean };
+/** group: the skill group of the CV it belongs in, or null for the group of added skills. */
+export type MissingSkill = { name: string; required: boolean; group: string | null };
 
 /** How the tailored CV matches the offer. Computed by the server, not written by the AI. */
 export type MatchReport = {

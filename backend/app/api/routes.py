@@ -110,7 +110,7 @@ def create_application(
         report=MatchReportOut(
             matched_skills=result.report.matched_skills,
             missing_skills=[
-                MissingSkillOut(name=skill.name, required=skill.required)
+                MissingSkillOut(name=skill.name, required=skill.required, group=skill.group)
                 for skill in result.report.missing_skills
             ],
             changes=result.report.changes,

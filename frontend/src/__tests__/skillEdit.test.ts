@@ -30,6 +30,20 @@ describe("adding the skills of the offer", () => {
     expect(twice[2]).toEqual({ category: "Other skills", items: "Kubernetes, Terraform" });
   });
 
+  it("puts a skill in the group of related skills", () => {
+    const added = addSkill(drafts, "Django", "fr", "Back-end");
+
+    expect(added).toHaveLength(2);
+    expect(added[0]).toEqual({ category: "Back-end", items: "Python, FastAPI, Django" });
+  });
+
+  it("uses the group of added skills when the related group was removed", () => {
+    expect(addSkill(drafts, "Kubernetes", "en", "DevOps").at(-1)).toEqual({
+      category: "Other skills",
+      items: "Kubernetes",
+    });
+  });
+
   it("never adds a skill twice", () => {
     expect(addSkill(drafts, "PYTHON", "en")).toBe(drafts);
   });

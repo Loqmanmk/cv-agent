@@ -128,7 +128,9 @@ export function ReviewEditor({
         isAdded={(skill) => hasSkill(drafts, skill)}
         onToggle={(skill, added) =>
           setDrafts((current) =>
-            added ? addSkill(current, skill, result.language) : removeSkill(current, skill),
+            added
+              ? addSkill(current, skill.name, result.language, skill.group)
+              : removeSkill(current, skill.name),
           )
         }
       />

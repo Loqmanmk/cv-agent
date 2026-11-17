@@ -1,11 +1,11 @@
 "use client";
 
-import type { MatchReport } from "@/lib/types";
+import type { MatchReport, MissingSkill } from "@/lib/types";
 
 type Props = {
   report: MatchReport;
   isAdded: (skill: string) => boolean;
-  onToggle: (skill: string, added: boolean) => void;
+  onToggle: (skill: MissingSkill, added: boolean) => void;
 };
 
 export function MatchReportPanel({ report, isAdded, onToggle }: Props) {
@@ -35,8 +35,9 @@ export function MatchReportPanel({ report, isAdded, onToggle }: Props) {
         <fieldset className="mt-4">
           <legend className="font-medium">Asked by the offer but not in your CV</legend>
           <p className="mt-1 text-gray-600">
-            Tick only what you really know: the recruiter may ask about it in the interview. Ticked
-            skills are added to your skills. Then click &quot;Regenerate PDFs&quot;.
+            Tick only what you really know: the recruiter may ask about it in the interview. Each
+            ticked skill joins the group of related skills, for example Kubernetes with your DevOps
+            skills. Then click &quot;Regenerate PDFs&quot;.
           </p>
           <ul className="mt-2 space-y-1">
             {missingSkills.map((skill) => {
@@ -47,12 +48,13 @@ export function MatchReportPanel({ report, isAdded, onToggle }: Props) {
                     id={id}
                     type="checkbox"
                     checked={isAdded(skill.name)}
-                    onChange={(event) => onToggle(skill.name, event.target.checked)}
+                    onChange={(event) => onToggle(skill, event.target.checked)}
                   />
                   <label htmlFor={id}>
                     {skill.name}
                     <span className="ml-2 text-xs text-gray-500">
                       {skill.required ? "required" : "nice to have"}
+                      {skill.group && ` · goes to ${skill.group}`}
                     </span>
                   </label>
                 </li>

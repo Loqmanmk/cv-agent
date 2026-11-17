@@ -57,7 +57,7 @@ def test_retries_with_the_violations_as_feedback() -> None:
 
     result = CVTailor(provider).tailor(make_cv(), make_offer())
 
-    assert result.skills == make_cv().skills
+    assert "Kubernetes" not in [item for group in result.skills for item in group.items]
     assert len(provider.calls) == 2
     assert "Kubernetes" not in provider.calls[0][1]
     assert "<problems_to_fix>" in provider.calls[1][1]
@@ -88,6 +88,12 @@ def test_contact_details_are_hidden_from_the_ai_and_restored() -> None:
     assert "+00 000 000 000" not in prompt_seen_by_ai
     assert result.header.email == "jane@example.com"
     assert result.header.phone == "+00 000 000 000"
+
+
+def test_the_skills_focus_on_the_field_of_the_offer() -> None:
+    result = CVTailor(FakeLLMProvider(make_cv())).tailor(make_cv(), make_offer())
+
+    assert result.skills == [SkillGroup(category="Back-end", items=["Python", "FastAPI"])]
 
 
 def test_the_headline_of_the_cv_is_always_kept() -> None:
