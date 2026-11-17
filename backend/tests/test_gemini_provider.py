@@ -11,7 +11,7 @@ from pydantic import SecretStr
 
 from app.domain.cv import Language
 from app.domain.llm import LLMError, LLMUnavailableError
-from app.infrastructure.gemini_provider import MAX_ATTEMPTS, GeminiProvider
+from app.infrastructure.gemini_provider import MAX_ATTEMPTS, MAX_OVERLOADED_ATTEMPTS, GeminiProvider
 
 API_KEY = "test-key"
 VALID_ANSWER = '{"name": "French", "level": "Native"}'
@@ -95,25 +95,37 @@ def test_invalid_json_raises_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
         provider.generate("system", "user", Language)
 
 
-def test_retries_when_the_model_is_overloaded(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retries_once_when_the_model_is_overloaded(monkeypatch: pytest.MonkeyPatch) -> None:
     state = {"calls": 0}
-    provider = make_provider(monkeypatch, failing_first(2, 503, state))
+    provider = make_provider(monkeypatch, failing_first(1, 503, state))
 
     result = provider.generate("system", "user", Language)
 
     assert result.name == "French"
-    assert state["calls"] == 3
+    assert state["calls"] == 2
 
 
-def test_gives_up_after_the_maximum_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_overloaded_model_is_left_quickly_for_the_next_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     state = {"calls": 0}
     provider = make_provider(monkeypatch, failing_first(100, 503, state))
 
-    with pytest.raises(LLMError) as raised:
+    with pytest.raises(LLMUnavailableError) as raised:
         provider.generate("system", "user", Language)
 
     assert "503" in str(raised.value)
     assert API_KEY not in str(raised.value)
+    assert state["calls"] == MAX_OVERLOADED_ATTEMPTS
+
+
+def test_a_server_error_is_retried_more_times(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {"calls": 0}
+    provider = make_provider(monkeypatch, failing_first(100, 500, state))
+
+    with pytest.raises(LLMError):
+        provider.generate("system", "user", Language)
+
     assert state["calls"] == MAX_ATTEMPTS
 
 

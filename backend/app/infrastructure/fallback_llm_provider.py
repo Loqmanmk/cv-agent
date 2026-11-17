@@ -8,7 +8,9 @@ from app.domain.llm import LLMProvider, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_COOLDOWN_SECONDS = 30.0
+# An overloaded model is skipped for a few minutes, so the next steps of the same
+# application go straight to a model that answers instead of waiting on the busy one again.
+DEFAULT_COOLDOWN_SECONDS = 300.0
 
 
 class FallbackLLMProvider(LLMProvider):

@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 TEMPERATURE = 0.2
 MAX_ATTEMPTS = 4
+# "This model is currently experiencing high demand": waiting rarely helps, and other models
+# are available, so one quick retry only before falling back to the next model.
+OVERLOADED_CODE = 503
+MAX_OVERLOADED_ATTEMPTS = 2
 BASE_DELAY_SECONDS = 2.0
 RETRYABLE_CODES = {500, 502, 503, 504}
 UNAVAILABLE_CODES = RETRYABLE_CODES | {429}
@@ -82,7 +86,7 @@ class GeminiProvider(LLMProvider):
                     model=self._model, contents=prompt, config=config
                 )
             except errors.APIError as exc:
-                if exc.code in RETRYABLE_CODES and attempt < MAX_ATTEMPTS:
+                if exc.code in RETRYABLE_CODES and attempt < self._attempts_for(exc.code):
                     logger.warning("%s: code %s, retry %s", self._model, exc.code, attempt)
                     self._sleep(BASE_DELAY_SECONDS * 2 ** (attempt - 1))
                     continue
@@ -94,6 +98,10 @@ class GeminiProvider(LLMProvider):
             logger.info("%s answered", self._model)
             return str(response.text)
         raise LLMError("Gemini request failed.")
+
+    @staticmethod
+    def _attempts_for(code: int | None) -> int:
+        return MAX_OVERLOADED_ATTEMPTS if code == OVERLOADED_CODE else MAX_ATTEMPTS
 
     def _to_llm_error(self, exc: errors.APIError) -> LLMError:
         if exc.code in UNAVAILABLE_CODES:
