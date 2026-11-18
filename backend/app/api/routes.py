@@ -73,6 +73,7 @@ def create_application(
 ) -> ApplicationResponse:
     """Uses the uploaded file, or the saved CV of the user when no file is sent."""
     profile = profiles.require_complete(user_id)
+    saved = None
     if cv_file is None:
         saved = saved_cvs.require(user_id)
         cv_filename, cv_content = saved.filename, saved.content
@@ -88,6 +89,7 @@ def create_application(
         today=date.today(),
         include_photo=include_photo,
         cv_language=profile.cv_language,
+        structured_cv=saved.structured if saved is not None else None,
     )
     reservation = quotas.reserve_application(user_id)
     try:
@@ -96,6 +98,8 @@ def create_application(
         # A failed application is not counted: users only use their quota for real documents.
         quotas.release(user_id, reservation)
         raise
+    if saved is not None and saved.structured is None:
+        saved_cvs.remember_structure(user_id, saved.content, result.structured_cv)
     return ApplicationResponse(
         job_title=result.offer.title,
         company=result.offer.company,

@@ -1,3 +1,5 @@
+import threading
+
 from pydantic import BaseModel
 
 from app.domain.llm import LLMError, LLMProvider
@@ -23,10 +25,15 @@ class FakeLLMProvider(LLMProvider):
 
 
 class SequenceLLMProvider(LLMProvider):
-    """Returns preset answers one after the other. Records the prompts it received."""
+    """Returns preset answers in order. Records the prompts it received.
+
+    Each call takes the first preset answer of the type it asks for, so calls made at the
+    same time from two threads still get the right answers.
+    """
 
     def __init__(self, answers: list[BaseModel]) -> None:
         self._answers = list(answers)
+        self._lock = threading.Lock()
         self.calls: list[tuple[str, str]] = []
 
     def generate[T: BaseModel](
@@ -35,10 +42,9 @@ class SequenceLLMProvider(LLMProvider):
         user_prompt: str,
         response_model: type[T],
     ) -> T:
-        self.calls.append((system_prompt, user_prompt))
-        if not self._answers:
-            raise LLMError("No preset answer left")
-        answer = self._answers.pop(0)
-        if not isinstance(answer, response_model):
-            raise LLMError(f"Preset answer is not a {response_model.__name__}")
-        return answer
+        with self._lock:
+            self.calls.append((system_prompt, user_prompt))
+            for index, answer in enumerate(self._answers):
+                if isinstance(answer, response_model):
+                    return self._answers.pop(index)  # type: ignore[return-value]
+            raise LLMError(f"No preset answer left for {response_model.__name__}")

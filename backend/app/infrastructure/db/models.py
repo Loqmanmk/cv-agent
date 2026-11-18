@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Identity,
     Index,
+    Integer,
     LargeBinary,
     Text,
     UniqueConstraint,
@@ -184,6 +185,8 @@ class SavedCvRecord(Base):
     uploaded_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    structured_cv: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    structure_version: Mapped[int | None] = mapped_column(Integer)
 
 
 class OAuthIdentity(Base):

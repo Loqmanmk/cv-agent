@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Collection, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
 from pathlib import PurePath
@@ -67,11 +68,15 @@ class ApplicationRequest:
     today: date
     include_photo: bool = True
     cv_language: OfferLanguage = "fr"
+    # The CV already read by the AI on an earlier application, to skip reading it again.
+    structured_cv: CV | None = None
 
 
 @dataclass(frozen=True)
 class ApplicationResult:
     offer: JobOffer
+    # The CV as read from the file, before any translation: it can be reused next time.
+    structured_cv: CV
     original_cv: CV
     cv: CV
     letter: CoverLetter
@@ -106,11 +111,8 @@ class ApplicationService:
 
     def create(self, request: ApplicationRequest) -> ApplicationResult:
         parsed = self._parse(request)
-        logger.info("stage: analyzing the job offer")
-        offer = JobAnalyzer(self._public_llm).analyze(request.job_text)
-        conventions_for(offer.language)  # fail early, before spending more AI calls
-        logger.info("stage: structuring the CV")
-        cv = CVStructurer(self._private_llm).structure(parsed.text)
+        offer, structured = self._read_offer_and_cv(request, parsed)
+        cv = structured
         # The language the CV is really written in wins over the setting of the profile, so a
         # CV already in the language of the offer is never sent to a pointless translation.
         cv_language = detect_language(parsed.text) or request.cv_language
@@ -135,6 +137,7 @@ class ApplicationService:
         documents = self._renderer.render(tailored, letter, photo, offer.language)
         return ApplicationResult(
             offer=offer,
+            structured_cv=structured,
             original_cv=cv,
             cv=tailored,
             letter=letter,
@@ -143,6 +146,24 @@ class ApplicationService:
             photo=photo,
             report=build_match_report(cv, tailored, offer),
         )
+
+    def _read_offer_and_cv(
+        self, request: ApplicationRequest, parsed: ParsedDocument
+    ) -> tuple[JobOffer, CV]:
+        """The offer and the CV, read at the same time since neither needs the other."""
+        if request.structured_cv is not None:
+            logger.info("stage: analyzing the job offer (the saved CV is already read)")
+            return self._analyze(request.job_text), request.structured_cv
+        logger.info("stage: analyzing the job offer and structuring the CV at the same time")
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            offer = pool.submit(self._analyze, request.job_text)
+            cv = CVStructurer(self._private_llm).structure(parsed.text)
+            return offer.result(), cv
+
+    def _analyze(self, job_text: str) -> JobOffer:
+        offer = JobAnalyzer(self._public_llm).analyze(job_text)
+        conventions_for(offer.language)  # fail early, before spending more AI calls
+        return offer
 
     def _select_photo(self, images: list[ExtractedImage], include: bool) -> ExtractedImage | None:
         if not include:

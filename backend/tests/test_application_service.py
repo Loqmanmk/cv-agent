@@ -6,6 +6,7 @@ import pytest
 from docx import Document
 from pydantic import BaseModel
 
+from app.domain.cv import CV
 from app.domain.document import MAX_CV_BYTES
 from app.domain.job import JobOffer, OfferLanguage
 from app.domain.pdf import PdfConverter, PdfPageCounter
@@ -95,6 +96,7 @@ def make_request(
     content: bytes | None = None,
     include_photo: bool = True,
     cv_language: OfferLanguage = "fr",
+    structured_cv: CV | None = None,
 ) -> ApplicationRequest:
     return ApplicationRequest(
         cv_filename=filename,
@@ -106,6 +108,7 @@ def make_request(
         today=date(2026, 11, 6),
         include_photo=include_photo,
         cv_language=cv_language,
+        structured_cv=structured_cv,
     )
 
 
@@ -191,13 +194,14 @@ def test_a_file_that_is_too_large_is_refused() -> None:
     assert provider.calls == []
 
 
-def test_an_unsupported_offer_language_stops_after_one_ai_call() -> None:
-    service, provider, _ = make_service([make_offer(language="other")])
+def test_an_unsupported_offer_language_stops_before_tailoring() -> None:
+    # The offer and the CV are read at the same time, then the pipeline stops.
+    service, provider, _ = make_service([make_offer(language="other"), make_cv()])
 
     with pytest.raises(UnsupportedLetterLanguageError):
         service.create(make_request())
 
-    assert len(provider.calls) == 1
+    assert len(provider.calls) == 2
 
 
 def test_a_file_that_does_not_match_its_extension_is_refused() -> None:
@@ -319,6 +323,24 @@ def test_a_cv_in_another_language_than_the_profile_says_is_translated() -> None:
 
     assert len(provider.calls) == 5
     assert "German" in provider.calls[2][0]
+
+
+def test_a_cv_already_read_is_not_sent_to_the_ai_again() -> None:
+    service, provider, _ = make_service([make_offer(), make_cv(), make_body()])
+
+    result = service.create(make_request(structured_cv=make_cv()))
+
+    assert len(provider.calls) == 3
+    assert all("<cv_text>" not in prompt for _, prompt in provider.calls)
+    assert result.structured_cv == make_cv()
+
+
+def test_the_cv_read_from_the_file_is_given_back_to_be_kept() -> None:
+    service, _, _ = make_service([make_offer(), make_cv(), make_cv(), make_body()])
+
+    result = service.create(make_request())
+
+    assert result.structured_cv == make_cv()
 
 
 def test_a_translation_that_breaks_the_guard_stops_the_pipeline() -> None:

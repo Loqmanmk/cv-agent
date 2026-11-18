@@ -3,6 +3,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from app.domain.cv import CV
+
 
 class NoSavedCvError(Exception):
     """Raised when a user asks to use a saved CV but has not saved one."""
@@ -17,6 +19,9 @@ class SavedCv:
 
     filename: str
     content: bytes = field(repr=False)
+    # The CV already read by the AI, kept so the same file is never read twice.
+    structured: CV | None = field(default=None, repr=False)
+    structure_version: int | None = None
 
 
 @dataclass(frozen=True)
@@ -43,3 +48,9 @@ class SavedCvRepository(ABC):
 
     @abstractmethod
     def delete(self, user_id: uuid.UUID) -> None: ...
+
+    @abstractmethod
+    def remember_structure(
+        self, user_id: uuid.UUID, content: bytes, structured: CV, version: int
+    ) -> None:
+        """Keep the structured CV, only if the saved file is still this content."""

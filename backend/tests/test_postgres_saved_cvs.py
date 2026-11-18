@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from app.domain.saved_cv import SavedCv
 from app.infrastructure.db.postgres_saved_cvs import PostgresSavedCvRepository
 from tests.db_helpers import add_user
+from tests.test_tailoring_guard import make_cv
 
 FIRST = SavedCv(filename="cv.docx", content=b"PK-first")
 SECOND = SavedCv(filename="cv.pdf", content=b"%PDF-second")
@@ -87,6 +88,43 @@ def test_deleting_the_user_deletes_the_saved_cv(
         connection.execute(text("DELETE FROM users WHERE id = :id"), {"id": user_id})
 
     assert count_rows(clean_engine) == 0
+
+
+def test_the_structure_is_kept_with_the_saved_file(
+    saved_cvs: PostgresSavedCvRepository, user_id: uuid.UUID
+) -> None:
+    saved_cvs.save(user_id, FIRST)
+
+    saved_cvs.remember_structure(user_id, FIRST.content, make_cv(), version=1)
+
+    saved = saved_cvs.get(user_id)
+    assert saved is not None
+    assert (saved.structured, saved.structure_version) == (make_cv(), 1)
+
+
+def test_a_structure_for_a_replaced_file_is_not_kept(
+    saved_cvs: PostgresSavedCvRepository, user_id: uuid.UUID
+) -> None:
+    saved_cvs.save(user_id, SECOND)
+
+    saved_cvs.remember_structure(user_id, FIRST.content, make_cv(), version=1)
+
+    saved = saved_cvs.get(user_id)
+    assert saved is not None
+    assert saved.structured is None
+
+
+def test_a_new_file_forgets_the_structure_of_the_old_one(
+    saved_cvs: PostgresSavedCvRepository, user_id: uuid.UUID
+) -> None:
+    saved_cvs.save(user_id, FIRST)
+    saved_cvs.remember_structure(user_id, FIRST.content, make_cv(), version=1)
+
+    saved_cvs.save(user_id, SECOND)
+
+    saved = saved_cvs.get(user_id)
+    assert saved is not None
+    assert (saved.structured, saved.structure_version) == (None, None)
 
 
 def test_the_database_refuses_an_empty_file(

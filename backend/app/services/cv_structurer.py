@@ -1,6 +1,10 @@
 from app.domain.cv import CV
 from app.domain.llm import LLMProvider
 
+# Change it when the prompt or the CV model changes: saved structures of an older version are
+# then read again by the AI instead of being reused.
+STRUCTURE_VERSION = 1
+
 SYSTEM_PROMPT = """You extract structured data from a CV.
 
 Rules:

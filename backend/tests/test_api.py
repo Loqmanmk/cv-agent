@@ -15,6 +15,7 @@ from app.api.auth_dependencies import require_user, require_verified_user
 from app.api.dependencies import get_application_service, get_rate_limiter
 from app.api.rate_limit import RateLimiter
 from app.core.config import Settings, get_settings
+from app.domain.cv import CV
 from app.domain.document import MAX_CV_BYTES
 from app.domain.llm import LLMError, LLMUnavailableError
 from app.domain.plans import QuotaExceededError
@@ -35,6 +36,7 @@ from app.services.tailoring_guard import TailoringViolationError
 from tests.auth_helpers import FAKE_SESSION
 from tests.test_application_service import FAKE_PDF, ai_answers, make_docx, make_service
 from tests.test_config import IsolatedSettings
+from tests.test_tailoring_guard import make_cv
 
 ORIGIN = "http://localhost:3000"
 COMPLETE_PROFILE = Profile(address="Oujda, Maroc", city="Oujda", gender="m", cv_language="fr")
@@ -82,11 +84,15 @@ class FakeQuotas:
 class FakeSavedCvs:
     def __init__(self, saved: SavedCv | None = None) -> None:
         self._saved = saved
+        self.remembered: list[CV] = []
 
     def require(self, user_id: uuid.UUID) -> SavedCv:
         if self._saved is None:
             raise NoSavedCvError
         return self._saved
+
+    def remember_structure(self, user_id: uuid.UUID, content: bytes, structured: CV) -> None:
+        self.remembered.append(structured)
 
 
 def make_settings() -> Settings:
@@ -222,6 +228,27 @@ def test_without_a_file_the_saved_cv_is_used() -> None:
         "saved.pdf",
         b"%PDF-saved",
     )
+
+
+def test_the_saved_cv_is_read_once_then_kept_for_next_time() -> None:
+    service, _, _ = make_service(ai_answers())
+    saved = FakeSavedCvs(SavedCv(filename="saved.docx", content=make_docx()))
+
+    response = make_client(service, saved_cvs=saved).post("/applications", data={"job_text": "x"})
+
+    assert response.status_code == 200
+    assert len(saved.remembered) == 1
+
+
+def test_a_saved_cv_already_read_is_passed_to_the_pipeline() -> None:
+    stub = StubService(InvalidApplicationInputError("bad"))
+    structured = make_cv()
+    saved = FakeSavedCvs(SavedCv(filename="saved.pdf", content=b"%PDF", structured=structured))
+
+    make_client(stub, saved_cvs=saved).post("/applications", data={"job_text": "x"})
+
+    assert stub.requests[0].structured_cv == structured
+    assert saved.remembered == []
 
 
 def test_an_uploaded_file_wins_over_the_saved_cv() -> None:

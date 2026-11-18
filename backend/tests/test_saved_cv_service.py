@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from app.domain.cv import CV
 from app.domain.saved_cv import NoSavedCvError, SavedCv, SavedCvInfo, SavedCvRepository
 from app.services.application_service import InvalidApplicationInputError
 from app.services.saved_cv_service import MAX_FILENAME_CHARS, SavedCvService, clean_filename
@@ -27,6 +28,13 @@ class MemorySavedCvs(SavedCvRepository):
 
     def delete(self, user_id: uuid.UUID) -> None:
         self.stored.pop(user_id, None)
+
+    def remember_structure(
+        self, user_id: uuid.UUID, content: bytes, structured: CV, version: int
+    ) -> None:
+        saved = self.stored[user_id]
+        if saved.content == content:
+            self.stored[user_id] = SavedCv(saved.filename, saved.content, structured, version)
 
 
 @pytest.mark.parametrize(
@@ -78,6 +86,29 @@ def test_the_saved_cv_is_given_back() -> None:
     service.save(USER, "cv.docx", make_docx())
 
     assert service.require(USER).filename == "cv.docx"
+
+
+def test_the_structure_of_the_saved_cv_is_given_back() -> None:
+    from tests.test_tailoring_guard import make_cv
+
+    repository = MemorySavedCvs()
+    service = SavedCvService(repository)
+    content = make_docx()
+    service.save(USER, "cv.docx", content)
+
+    service.remember_structure(USER, content, make_cv())
+
+    assert service.require(USER).structured == make_cv()
+
+
+def test_a_structure_from_an_older_version_is_not_reused() -> None:
+    from tests.test_tailoring_guard import make_cv
+
+    repository = MemorySavedCvs()
+    content = make_docx()
+    repository.stored[USER] = SavedCv("cv.docx", content, make_cv(), structure_version=0)
+
+    assert SavedCvService(repository).require(USER).structured is None
 
 
 def test_asking_for_a_missing_saved_cv_says_what_to_do() -> None:

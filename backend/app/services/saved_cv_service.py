@@ -1,8 +1,10 @@
 import uuid
 from pathlib import PurePath
 
+from app.domain.cv import CV
 from app.domain.saved_cv import NoSavedCvError, SavedCv, SavedCvInfo, SavedCvRepository
 from app.services.application_service import check_cv_file
+from app.services.cv_structurer import STRUCTURE_VERSION
 
 MAX_FILENAME_CHARS = 200
 
@@ -33,10 +35,16 @@ class SavedCvService:
         return self._repository.save(user_id, SavedCv(filename=name, content=content))
 
     def require(self, user_id: uuid.UUID) -> SavedCv:
+        """The saved CV, with its structure only when it was made by the current version."""
         saved = self._repository.get(user_id)
         if saved is None:
             raise NoSavedCvError
+        if saved.structure_version != STRUCTURE_VERSION:
+            return SavedCv(filename=saved.filename, content=saved.content)
         return saved
+
+    def remember_structure(self, user_id: uuid.UUID, content: bytes, structured: CV) -> None:
+        self._repository.remember_structure(user_id, content, structured, STRUCTURE_VERSION)
 
     def delete(self, user_id: uuid.UUID) -> None:
         self._repository.delete(user_id)
