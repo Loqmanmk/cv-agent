@@ -1,6 +1,6 @@
 import pytest
 
-from app.domain.job import JobOffer
+from app.domain.job import JobOffer, SkillField
 from app.services.job_analyzer import MAX_CHARS, SYSTEM_PROMPT, JobAnalysisError, JobAnalyzer
 from tests.fakes import FakeLLMProvider
 
@@ -114,6 +114,28 @@ def test_drops_a_company_summary_with_an_invented_number() -> None:
 
 def test_drops_a_company_summary_that_is_too_long() -> None:
     assert analyzed_summary("word " * 200) == ""
+
+
+def test_each_kept_skill_keeps_one_short_field() -> None:
+    offer = make_offer(required=["Python", "Rust"], nice=["Kubernetes"]).model_copy(
+        update={
+            "skill_fields": [
+                SkillField(skill="Python", field="Back-end"),
+                SkillField(skill="python", field="Data"),
+                SkillField(skill="Rust", field="Systems"),
+                SkillField(skill="Kubernetes", field="a heading that is far too long to fit"),
+                SkillField(skill="Docker", field="DevOps"),
+            ]
+        }
+    )
+
+    result = JobAnalyzer(FakeLLMProvider(offer)).analyze(OFFER_TEXT)
+
+    assert result.skill_fields == [SkillField(skill="Python", field="Back-end")]
+
+
+def test_prompt_asks_for_the_field_of_each_skill() -> None:
+    assert "skill_fields" in SYSTEM_PROMPT
 
 
 def test_prompt_asks_for_a_company_summary() -> None:

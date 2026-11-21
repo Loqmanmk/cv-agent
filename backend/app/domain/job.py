@@ -8,6 +8,13 @@ OfferLanguage = Literal["fr", "en", "de", "ar", "other"]
 ContractType = Literal["internship", "full_time", "part_time", "freelance", "unknown"]
 
 
+class SkillField(DomainModel):
+    """The heading of the CV skills section a skill of the offer belongs to."""
+
+    skill: str
+    field: str
+
+
 class JobOffer(DomainModel):
     title: str
     company: str = ""
@@ -23,3 +30,4 @@ class JobOffer(DomainModel):
     nice_to_have_skills: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
     missions: list[str] = Field(default_factory=list)
+    skill_fields: list[SkillField] = Field(default_factory=list)

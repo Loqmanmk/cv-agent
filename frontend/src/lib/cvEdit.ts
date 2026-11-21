@@ -40,8 +40,9 @@ export function hasSkill(drafts: SkillDraft[], name: string): boolean {
 }
 
 /**
- * Adds a skill to its group (Kubernetes with the DevOps skills), or to the group of added
- * skills when it has none or when that group is no longer in the CV.
+ * Adds a skill to its group (React with the front-end skills). A group that is not in the CV
+ * yet is created with its own name ("Business & Strategy"). Only a skill without any group
+ * goes to the group of added skills.
  */
 export function addSkill(
   drafts: SkillDraft[],
@@ -50,10 +51,9 @@ export function addSkill(
   group: string | null = null,
 ): SkillDraft[] {
   if (hasSkill(drafts, name)) return drafts;
-  const own = group === null ? -1 : drafts.findIndex((draft) => draft.category.trim() === group);
-  const category = own === -1 ? addedSkillsGroup(language) : drafts[own].category.trim();
-  const index = drafts.findIndex((draft) => draft.category.trim() === category);
-  if (index === -1) return [...drafts, { category, items: name }];
+  const wanted = group?.trim() || addedSkillsGroup(language);
+  const index = drafts.findIndex((draft) => sameSkill(draft.category, wanted));
+  if (index === -1) return [...drafts, { category: wanted, items: name }];
   return drafts.map((draft, position) =>
     position === index ? { ...draft, items: [...parseItems(draft.items), name].join(", ") } : draft,
   );

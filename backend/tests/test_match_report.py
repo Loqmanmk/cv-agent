@@ -1,5 +1,5 @@
 from app.domain.cv import CV, Project, SkillGroup
-from app.domain.job import JobOffer
+from app.domain.job import JobOffer, SkillField
 from app.services.match_report import MAX_SKILL_CHARS, MissingSkill, build_match_report
 from tests.test_tailoring_guard import make_cv
 
@@ -38,6 +38,54 @@ def test_a_missing_skill_names_the_group_it_belongs_in() -> None:
     report = build_match_report(cv, cv, make_offer(["Django", "Snowflake-like unknown"]))
 
     assert [skill.group for skill in report.missing_skills] == ["Back-end", None]
+
+
+def test_a_skill_joins_its_group_even_when_the_tailoring_left_that_group_out() -> None:
+    original = make_cv().model_copy(
+        update={
+            "skills": [
+                SkillGroup(category="Développement Front-end", items=["Angular"]),
+                SkillGroup(category="IA", items=["Pandas"]),
+            ]
+        }
+    )
+    tailored = original.model_copy(update={"skills": original.skills[1:]})
+
+    report = build_match_report(original, tailored, make_offer(["Vue.js"]))
+
+    assert report.missing_skills[0].group == "Développement Front-end"
+
+
+def test_a_skill_of_another_field_gets_a_new_group_named_by_the_ai() -> None:
+    cv = make_cv()
+    offer = make_offer(["market research", "lead qualification"]).model_copy(
+        update={
+            "skill_fields": [
+                SkillField(skill="market research", field="Business & Strategy"),
+                SkillField(skill="Lead  qualification", field="Business & Strategy"),
+            ]
+        }
+    )
+
+    report = build_match_report(cv, cv, offer)
+
+    assert [skill.group for skill in report.missing_skills] == [
+        "Business & Strategy",
+        "Business & Strategy",
+    ]
+
+
+def test_the_field_of_the_ai_reuses_a_group_of_the_cv_of_the_same_kind() -> None:
+    cv = make_cv().model_copy(
+        update={"skills": [SkillGroup(category="Bases de données", items=["MySQL"])]}
+    )
+    offer = make_offer(["Snowflake-like unknown"]).model_copy(
+        update={"skill_fields": [SkillField(skill="Snowflake-like unknown", field="Databases")]}
+    )
+
+    report = build_match_report(cv, cv, offer)
+
+    assert report.missing_skills[0].group == "Bases de données"
 
 
 def test_a_skill_is_matched_wherever_the_cv_mentions_it() -> None:

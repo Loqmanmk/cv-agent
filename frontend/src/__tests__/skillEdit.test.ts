@@ -37,11 +37,20 @@ describe("adding the skills of the offer", () => {
     expect(added[0]).toEqual({ category: "Back-end", items: "Python, FastAPI, Django" });
   });
 
-  it("uses the group of added skills when the related group was removed", () => {
-    expect(addSkill(drafts, "Kubernetes", "en", "DevOps").at(-1)).toEqual({
-      category: "Other skills",
-      items: "Kubernetes",
+  it("creates the group of the skill when the CV does not have it", () => {
+    const once = addSkill(drafts, "market research", "en", "Business & Strategy");
+
+    const twice = addSkill(once, "lead qualification", "en", "Business & Strategy");
+
+    expect(twice).toHaveLength(3);
+    expect(twice[2]).toEqual({
+      category: "Business & Strategy",
+      items: "market research, lead qualification",
     });
+  });
+
+  it("finds the group whatever the case of its name", () => {
+    expect(addSkill(drafts, "Django", "en", "back-end")[0].items).toBe("Python, FastAPI, Django");
   });
 
   it("never adds a skill twice", () => {

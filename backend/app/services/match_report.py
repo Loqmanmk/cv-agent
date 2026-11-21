@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 
-from app.domain.cv import CV, Experience, Project
+from app.domain.cv import CV, Experience, Project, SkillGroup
 from app.domain.job import JobOffer
-from app.services.skill_families import group_for
+from app.services.skill_families import category_fields, group_for
 from app.services.tailoring_guard import contains_term, strings_in
 
 MAX_SKILL_CHARS = 60
@@ -14,7 +14,8 @@ class MissingSkill:
 
     name: str
     required: bool
-    # The skill group of the tailored CV it belongs in, or None to put it in a new group.
+    # The skill group it belongs in: a group of the CV, or the name of a new group to create.
+    # None only when nothing is known about the skill.
     group: str | None = None
 
 
@@ -107,6 +108,43 @@ def _changes(original: CV, tailored: CV) -> list[str]:
     return found
 
 
+def _named_like(field: str, groups: list[SkillGroup]) -> str | None:
+    """A group of the CV with the same name as the field, or about the same kind of skills."""
+    for group in groups:
+        if group.category.casefold() == field.casefold():
+            return group.category
+    kinds = category_fields(field)
+    for group in groups:
+        if kinds and kinds & category_fields(group.category):
+            return group.category
+    return None
+
+
+def _group_of(name: str, original: CV, tailored: CV, offer: JobOffer) -> str | None:
+    """Where a missing skill goes in the CV.
+
+    1. The group holding related skills ("React" with the front-end skills), looking also at
+       the groups the tailoring left out, which are then shown again.
+    2. Otherwise the field the AI gave the skill when reading the offer: an existing group of
+       that kind, or a new group with that name ("market research" -> "Business & Strategy").
+    """
+    group = group_for(name, tailored.skills) or group_for(name, original.skills)
+    if group is not None:
+        return group
+    key = " ".join(name.split()).casefold()
+    field = next(
+        (
+            entry.field
+            for entry in offer.skill_fields
+            if " ".join(entry.skill.split()).casefold() == key
+        ),
+        None,
+    )
+    if field is None:
+        return None
+    return _named_like(field, [*tailored.skills, *original.skills]) or field
+
+
 def build_match_report(original: CV, tailored: CV, offer: JobOffer) -> MatchReport:
     corpus = " ".join(strings_in(original.model_dump()))
     matched: list[str] = []
@@ -116,7 +154,9 @@ def build_match_report(original: CV, tailored: CV, offer: JobOffer) -> MatchRepo
             matched.append(name)
         else:
             missing.append(
-                MissingSkill(name=name, required=required, group=group_for(name, tailored.skills))
+                MissingSkill(
+                    name=name, required=required, group=_group_of(name, original, tailored, offer)
+                )
             )
     return MatchReport(
         matched_skills=matched, missing_skills=missing, changes=_changes(original, tailored)
