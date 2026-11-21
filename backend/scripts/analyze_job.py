@@ -3,7 +3,7 @@ from pathlib import Path
 
 from app.core.config import get_settings
 from app.domain.llm import LLMError
-from app.infrastructure.llm_factory import build_gemini_chain
+from app.infrastructure.llm_factory import build_llm_chain
 from app.services.job_analyzer import JobAnalysisError, JobAnalyzer
 
 OUTPUT = Path("../data/extracted/job.json")
@@ -14,7 +14,7 @@ def main(path: str) -> None:
     if settings.gemini_api_key is None:
         sys.exit("GEMINI_API_KEY is missing in backend/.env")
 
-    analyzer = JobAnalyzer(build_gemini_chain(settings))
+    analyzer = JobAnalyzer(build_llm_chain(settings))
     try:
         offer = analyzer.analyze(Path(path).read_text(encoding="utf-8"))
     except (LLMError, JobAnalysisError) as error:

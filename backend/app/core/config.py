@@ -16,6 +16,8 @@ class Settings(BaseSettings):
         "gemini-3.1-flash-lite,gemini-3.5-flash-lite,gemini-flash-lite-latest,"
         "gemini-3.1-flash-lite-preview"
     )
+    groq_api_key: SecretStr | None = None
+    groq_models: str = "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b"
     cors_origins: str = "http://localhost:3000"
     rate_limit_per_hour: int = 10
     render_rate_limit_per_hour: int = 60
@@ -42,6 +44,11 @@ class Settings(BaseSettings):
     def gemini_model_chain(self) -> list[str]:
         """The main model first, then the fallbacks, without duplicates."""
         names = [self.gemini_model, *self.gemini_fallback_models.split(",")]
+        return list(dict.fromkeys(name.strip() for name in names if name.strip()))
+
+    @property
+    def groq_model_list(self) -> list[str]:
+        names = self.groq_models.split(",")
         return list(dict.fromkeys(name.strip() for name in names if name.strip()))
 
     @property

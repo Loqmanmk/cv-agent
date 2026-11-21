@@ -4,7 +4,7 @@ from pathlib import Path
 from app.core.config import get_settings
 from app.domain.cv import CV
 from app.domain.llm import LLMError
-from app.infrastructure.llm_factory import build_gemini_chain
+from app.infrastructure.llm_factory import build_llm_chain
 from app.services.cv_translator import CVTranslator
 from app.services.letter_conventions import UnsupportedLetterLanguageError
 from app.services.masking_llm_provider import MaskingLLMProvider
@@ -19,7 +19,7 @@ def main(language: str) -> None:
         sys.exit(f"Language must be one of: {', '.join(LANGUAGES)}")
     settings = get_settings()
     cv = CV.model_validate_json((DATA / "tailored_cv.json").read_text(encoding="utf-8"))
-    translator = CVTranslator(MaskingLLMProvider(build_gemini_chain(settings)))
+    translator = CVTranslator(MaskingLLMProvider(build_llm_chain(settings)))
 
     try:
         translated = translator.translate(cv, language)

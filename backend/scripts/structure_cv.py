@@ -4,7 +4,7 @@ from pathlib import Path
 from app.core.config import get_settings
 from app.domain.llm import LLMError
 from app.infrastructure.docx_parser import DocxParser
-from app.infrastructure.llm_factory import build_gemini_chain
+from app.infrastructure.llm_factory import build_llm_chain
 from app.services.cv_structurer import CVStructurer, CVStructuringError
 from app.services.masking_llm_provider import MaskingLLMProvider
 
@@ -16,7 +16,7 @@ def main(path: str) -> None:
     if settings.gemini_api_key is None:
         sys.exit("GEMINI_API_KEY is missing in backend/.env")
 
-    gemini = build_gemini_chain(settings)
+    gemini = build_llm_chain(settings)
     structurer = CVStructurer(MaskingLLMProvider(gemini))
     parsed = DocxParser().parse(Path(path).read_bytes())
 

@@ -5,7 +5,7 @@ from app.core.config import get_settings
 from app.domain.cv import CV
 from app.domain.job import JobOffer
 from app.domain.llm import LLMError
-from app.infrastructure.llm_factory import build_gemini_chain
+from app.infrastructure.llm_factory import build_llm_chain
 from app.services.cv_tailor import CVTailor
 from app.services.masking_llm_provider import MaskingLLMProvider
 from app.services.tailoring_guard import TailoringViolationError
@@ -21,7 +21,7 @@ def main() -> None:
     cv = CV.model_validate_json((DATA / "cv.json").read_text(encoding="utf-8"))
     offer = JobOffer.model_validate_json((DATA / "job.json").read_text(encoding="utf-8"))
 
-    gemini = build_gemini_chain(settings)
+    gemini = build_llm_chain(settings)
     tailor = CVTailor(MaskingLLMProvider(gemini))
 
     try:
