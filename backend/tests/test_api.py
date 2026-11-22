@@ -156,8 +156,15 @@ def test_creates_an_application_and_counts_it() -> None:
     assert base64.b64decode(body["cv_pdf_base64"]) == FAKE_PDF
     assert base64.b64decode(body["letter_pdf_base64"]) == FAKE_PDF
     assert (quotas.reserved, quotas.released) == (1, 0)
-    assert set(body["report"]) == {"matched_skills", "missing_skills", "changes"}
+    assert set(body["report"]) == {"matched_skills", "missing_skills", "changes", "score"}
     assert "Profile rewritten with the words of the offer." in body["report"]["changes"]
+    assert set(body["report"]["score"]) == {
+        "value",
+        "required_matched",
+        "required_total",
+        "nice_matched",
+        "nice_total",
+    }
 
 
 def test_the_profile_of_the_user_reaches_the_application() -> None:

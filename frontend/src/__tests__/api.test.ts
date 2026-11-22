@@ -103,6 +103,7 @@ describe("createApplication", () => {
           { name: "Terraform", required: false, group: null },
         ],
         changes: ["Profile rewritten with the words of the offer."],
+        score: { value: 29, requiredMatched: 1, requiredTotal: 3, niceMatched: 0, niceTotal: 1 },
       },
     });
   });
@@ -119,6 +120,7 @@ describe("createApplication", () => {
       matchedSkills: ["Python"],
       missingSkills: [{ name: "Go", required: true, group: null }],
       changes: [],
+      score: { value: null, requiredMatched: 0, requiredTotal: 0, niceMatched: 0, niceTotal: 0 },
     });
   });
 
@@ -129,6 +131,25 @@ describe("createApplication", () => {
       matchedSkills: [],
       missingSkills: [],
       changes: [],
+      score: { value: null, requiredMatched: 0, requiredTotal: 0, niceMatched: 0, niceTotal: 0 },
+    });
+  });
+
+  it("refuses a score outside 0 to 100 and broken counts", async () => {
+    const report = {
+      matched_skills: [],
+      missing_skills: [],
+      changes: [],
+      score: { value: 140, required_matched: -1, required_total: "3", nice_matched: 1.5 },
+    };
+    fetchMock.mockResolvedValue(jsonResponse(makeResultBody({ report })));
+
+    expect((await createApplication(values)).report.score).toEqual({
+      value: null,
+      requiredMatched: 0,
+      requiredTotal: 0,
+      niceMatched: 0,
+      niceTotal: 0,
     });
   });
 

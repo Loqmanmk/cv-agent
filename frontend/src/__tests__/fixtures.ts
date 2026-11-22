@@ -9,6 +9,7 @@ export function makeReport(overrides: Partial<MatchReport> = {}): MatchReport {
       { name: "Terraform", required: false, group: null },
     ],
     changes: ["Profile rewritten with the words of the offer."],
+    score: { value: 29, requiredMatched: 1, requiredTotal: 3, niceMatched: 0, niceTotal: 1 },
     ...overrides,
   };
 }
@@ -100,6 +101,13 @@ export function makeResultBody(overrides: Record<string, unknown> = {}) {
         { name: "Terraform", required: false },
       ],
       changes: ["Profile rewritten with the words of the offer."],
+      score: {
+        value: 29,
+        required_matched: 1,
+        required_total: 3,
+        nice_matched: 0,
+        nice_total: 1,
+      },
     },
     ...overrides,
   };

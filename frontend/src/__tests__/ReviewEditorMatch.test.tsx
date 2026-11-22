@@ -85,8 +85,37 @@ describe("Match with the offer", () => {
   });
 
   it("shows nothing when there is nothing to report", () => {
-    setup(makeReport({ matchedSkills: [], missingSkills: [], changes: [] }));
+    setup(
+      makeReport({
+        matchedSkills: [],
+        missingSkills: [],
+        changes: [],
+        score: { value: null, requiredMatched: 0, requiredTotal: 0, niceMatched: 0, niceTotal: 0 },
+      }),
+    );
 
     expect(screen.queryByRole("region", { name: "Match with the offer" })).not.toBeInTheDocument();
+  });
+
+  it("shows the match score with its verdict and the skills behind it", () => {
+    setup(makeReport());
+
+    expect(screen.getByRole("meter", { name: "Match score" })).toHaveAttribute(
+      "aria-valuenow",
+      "29",
+    );
+    expect(screen.getByText(/Weak match/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/1 of 3 required skills and 0 of 1 nice-to-have skills/),
+    ).toBeInTheDocument();
+  });
+
+  it("raises the score live with the skills the user ticks", async () => {
+    const { user } = setup(makeReport());
+
+    await user.click(screen.getByLabelText(/Django/));
+
+    // 2 + 2 of the 2 * 3 + 1 points.
+    expect(screen.getByText("With the skills you ticked: 57/100.")).toBeInTheDocument();
   });
 });

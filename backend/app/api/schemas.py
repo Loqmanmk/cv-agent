@@ -11,10 +11,19 @@ class MissingSkillOut(BaseModel):
     group: str | None
 
 
+class MatchScoreOut(BaseModel):
+    value: int | None
+    required_matched: int
+    required_total: int
+    nice_matched: int
+    nice_total: int
+
+
 class MatchReportOut(BaseModel):
     matched_skills: list[str]
     missing_skills: list[MissingSkillOut]
     changes: list[str]
+    score: MatchScoreOut
 
 
 class ApplicationResponse(BaseModel):

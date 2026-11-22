@@ -65,10 +65,21 @@ export type Cv = {
 export type MissingSkill = { name: string; required: boolean; group: string | null };
 
 /** How the tailored CV matches the offer. Computed by the server, not written by the AI. */
+/** How well the CV the user sent fits the offer, from the skills the offer names. */
+export type MatchScore = {
+  /** 0 to 100, or null when the offer names no skills. */
+  value: number | null;
+  requiredMatched: number;
+  requiredTotal: number;
+  niceMatched: number;
+  niceTotal: number;
+};
+
 export type MatchReport = {
   matchedSkills: string[];
   missingSkills: MissingSkill[];
   changes: string[];
+  score: MatchScore;
 };
 
 export type CoverLetter = {

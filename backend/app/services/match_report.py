@@ -6,6 +6,9 @@ from app.services.skill_families import category_fields, group_for
 from app.services.tailoring_guard import contains_term, strings_in
 
 MAX_SKILL_CHARS = 60
+# A required skill counts twice as much as a nice-to-have one in the score.
+REQUIRED_WEIGHT = 2
+NICE_WEIGHT = 1
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,31 @@ class MissingSkill:
 
 
 @dataclass(frozen=True)
+class MatchScore:
+    """How well the CV, as the user sent it, fits the offer: 0 to 100.
+
+    Only the skills the offer names are counted, a required one twice as much as a
+    nice-to-have one. None when the offer names no skills to compare with.
+    """
+
+    value: int | None
+    required_matched: int
+    required_total: int
+    nice_matched: int
+    nice_total: int
+
+
+def score_of(
+    required_matched: int, required_total: int, nice_matched: int, nice_total: int
+) -> int | None:
+    total = REQUIRED_WEIGHT * required_total + NICE_WEIGHT * nice_total
+    if total == 0:
+        return None
+    matched = REQUIRED_WEIGHT * required_matched + NICE_WEIGHT * nice_matched
+    return round(100 * matched / total)
+
+
+@dataclass(frozen=True)
 class MatchReport:
     """How the tailored CV matches the offer, and every change made to get there.
 
@@ -29,6 +57,7 @@ class MatchReport:
     matched_skills: list[str]
     missing_skills: list[MissingSkill]
     changes: list[str]
+    score: MatchScore
 
 
 def _offer_skills(offer: JobOffer) -> list[tuple[str, bool]]:
@@ -149,8 +178,11 @@ def build_match_report(original: CV, tailored: CV, offer: JobOffer) -> MatchRepo
     corpus = " ".join(strings_in(original.model_dump()))
     matched: list[str] = []
     missing: list[MissingSkill] = []
+    counts = {True: [0, 0], False: [0, 0]}  # required -> [matched, total]
     for name, required in _offer_skills(offer):
+        counts[required][1] += 1
         if contains_term(corpus, name):
+            counts[required][0] += 1
             matched.append(name)
         else:
             missing.append(
@@ -158,6 +190,17 @@ def build_match_report(original: CV, tailored: CV, offer: JobOffer) -> MatchRepo
                     name=name, required=required, group=_group_of(name, original, tailored, offer)
                 )
             )
+    (required_matched, required_total), (nice_matched, nice_total) = counts[True], counts[False]
+    score = MatchScore(
+        value=score_of(required_matched, required_total, nice_matched, nice_total),
+        required_matched=required_matched,
+        required_total=required_total,
+        nice_matched=nice_matched,
+        nice_total=nice_total,
+    )
     return MatchReport(
-        matched_skills=matched, missing_skills=missing, changes=_changes(original, tailored)
+        matched_skills=matched,
+        missing_skills=missing,
+        changes=_changes(original, tailored),
+        score=score,
     )

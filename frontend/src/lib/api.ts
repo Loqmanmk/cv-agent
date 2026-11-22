@@ -1,5 +1,5 @@
 import { getCsrfToken, notifyUnauthorized, SAFE_METHODS } from "@/lib/session";
-import type { CoverLetter, Cv, MatchReport, MissingSkill } from "@/lib/types";
+import type { CoverLetter, Cv, MatchReport, MatchScore, MissingSkill } from "@/lib/types";
 
 export type ApplicationRequestValues = {
   /** null: the server uses the CV saved on the account. */
@@ -117,7 +117,37 @@ function isResultBody(body: unknown): body is ResultBody {
   );
 }
 
-const EMPTY_REPORT: MatchReport = { matchedSkills: [], missingSkills: [], changes: [] };
+const NO_SCORE: MatchScore = {
+  value: null,
+  requiredMatched: 0,
+  requiredTotal: 0,
+  niceMatched: 0,
+  niceTotal: 0,
+};
+
+const EMPTY_REPORT: MatchReport = {
+  matchedSkills: [],
+  missingSkills: [],
+  changes: [],
+  score: NO_SCORE,
+};
+
+function count(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
+}
+
+/** A missing or broken score only hides the score. */
+function toScore(value: unknown): MatchScore {
+  if (!isObject(value)) return NO_SCORE;
+  const score = value.value;
+  return {
+    value: typeof score === "number" && score >= 0 && score <= 100 ? Math.round(score) : null,
+    requiredMatched: count(value.required_matched),
+    requiredTotal: count(value.required_total),
+    niceMatched: count(value.nice_matched),
+    niceTotal: count(value.nice_total),
+  };
+}
 
 function strings(value: unknown): string[] {
   return Array.isArray(value)
@@ -141,6 +171,7 @@ function toReport(value: unknown): MatchReport {
       group: typeof skill.group === "string" ? skill.group : null,
     })),
     changes: strings(value.changes),
+    score: toScore(value.score),
   };
 }
 

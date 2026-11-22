@@ -1,5 +1,6 @@
 "use client";
 
+import { MatchScoreCard } from "@/components/MatchScoreCard";
 import type { MatchReport, MissingSkill } from "@/lib/types";
 
 type Props = {
@@ -9,14 +10,16 @@ type Props = {
 };
 
 export function MatchReportPanel({ report, isAdded, onToggle }: Props) {
-  const { matchedSkills, missingSkills, changes } = report;
-  if (matchedSkills.length === 0 && missingSkills.length === 0 && changes.length === 0) {
+  const { matchedSkills, missingSkills, changes, score } = report;
+  const empty = matchedSkills.length === 0 && missingSkills.length === 0 && changes.length === 0;
+  if (empty && score.value === null) {
     return null;
   }
 
   return (
     <section aria-label="Match with the offer" className="mt-6 rounded border p-4 text-sm">
       <h3 className="text-base font-semibold">Match with the offer</h3>
+      <MatchScoreCard score={score} missingSkills={missingSkills} isAdded={isAdded} />
 
       {matchedSkills.length > 0 && (
         <div className="mt-3">

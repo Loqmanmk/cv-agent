@@ -1,6 +1,12 @@
 from app.domain.cv import CV, Project, SkillGroup
 from app.domain.job import JobOffer, SkillField
-from app.services.match_report import MAX_SKILL_CHARS, MissingSkill, build_match_report
+from app.services.match_report import (
+    MAX_SKILL_CHARS,
+    MatchScore,
+    MissingSkill,
+    build_match_report,
+    score_of,
+)
 from tests.test_tailoring_guard import make_cv
 
 
@@ -160,3 +166,36 @@ def test_reordered_bullets_are_reported_as_reordered() -> None:
     changes = build_match_report(original, tailored, make_offer([])).changes
 
     assert changes == ["PathFinder: bullets reordered, the most relevant first."]
+
+
+def test_the_score_counts_a_required_skill_twice_as_much_as_a_nice_one() -> None:
+    cv = make_cv()
+    known = skills_of(cv)[0]
+
+    report = build_match_report(cv, cv, make_offer([known, "Kubernetes"], ["Terraform"]))
+
+    # 2 of the 2 + 2 + 1 points: the known required skill only.
+    assert report.score == MatchScore(
+        value=40, required_matched=1, required_total=2, nice_matched=0, nice_total=1
+    )
+
+
+def test_a_cv_with_every_skill_scores_100() -> None:
+    cv = make_cv()
+    known = skills_of(cv)
+
+    report = build_match_report(cv, cv, make_offer(known[:1], known[1:2]))
+
+    assert report.score.value == 100
+
+
+def test_an_offer_without_skills_has_no_score() -> None:
+    cv = make_cv()
+
+    assert build_match_report(cv, cv, make_offer([])).score.value is None
+
+
+def test_the_score_is_rounded_and_stays_between_0_and_100() -> None:
+    assert score_of(0, 3, 0, 0) == 0
+    assert score_of(1, 3, 0, 0) == 33
+    assert score_of(2, 3, 1, 1) == 71

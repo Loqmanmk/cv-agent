@@ -1,4 +1,5 @@
 import base64
+from dataclasses import asdict
 from datetime import date
 from typing import Annotated
 
@@ -23,6 +24,7 @@ from app.api.schemas import (
     JobTextResponse,
     JobUrlRequest,
     MatchReportOut,
+    MatchScoreOut,
     MissingSkillOut,
     RenderRequestBody,
     RenderResponse,
@@ -124,6 +126,7 @@ def create_application(
                 for skill in result.report.missing_skills
             ],
             changes=result.report.changes,
+            score=MatchScoreOut(**asdict(result.report.score)),
         ),
     )
 
