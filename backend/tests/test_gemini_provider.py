@@ -95,16 +95,6 @@ def test_invalid_json_raises_llm_error(monkeypatch: pytest.MonkeyPatch) -> None:
         provider.generate("system", "user", Language)
 
 
-def test_retries_once_when_the_model_is_overloaded(monkeypatch: pytest.MonkeyPatch) -> None:
-    state = {"calls": 0}
-    provider = make_provider(monkeypatch, failing_first(1, 503, state))
-
-    result = provider.generate("system", "user", Language)
-
-    assert result.name == "French"
-    assert state["calls"] == 2
-
-
 def test_an_overloaded_model_is_left_quickly_for_the_next_one(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -116,7 +106,7 @@ def test_an_overloaded_model_is_left_quickly_for_the_next_one(
 
     assert "503" in str(raised.value)
     assert API_KEY not in str(raised.value)
-    assert state["calls"] == MAX_OVERLOADED_ATTEMPTS
+    assert state["calls"] == MAX_OVERLOADED_ATTEMPTS == 1
 
 
 def test_a_server_error_is_retried_more_times(monkeypatch: pytest.MonkeyPatch) -> None:

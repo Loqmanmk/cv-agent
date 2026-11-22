@@ -71,7 +71,7 @@ def test_the_pdfs_are_rendered_from_the_edited_text(clean_engine: Engine, owner:
 
     service.save(owner, make_request(cv=edited))
 
-    assert "Edited by the user." in converter.pages[0]
+    assert any("Edited by the user." in page for page in converter.pages)
 
 
 def test_a_photo_is_embedded_in_the_saved_cv(clean_engine: Engine, owner: uuid.UUID) -> None:
@@ -79,7 +79,7 @@ def test_a_photo_is_embedded_in_the_saved_cv(clean_engine: Engine, owner: uuid.U
 
     service.save(owner, make_request(photo_bytes=make_png(300, 353)))
 
-    assert "data:image/png;base64," in converter.pages[0]
+    assert any("data:image/png;base64," in page for page in converter.pages)
 
 
 def test_title_and_company_are_cleaned(clean_engine: Engine, owner: uuid.UUID) -> None:

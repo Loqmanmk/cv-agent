@@ -46,6 +46,7 @@ describe("ApplicationForm", () => {
       cvFile: cv,
       jobText: "Acme seeks an intern.",
       includePhoto: true,
+      includeLetter: true,
       saveCv: false,
     });
   });
@@ -59,6 +60,17 @@ describe("ApplicationForm", () => {
     await user.click(screen.getByRole("button", { name: "Create my application" }));
 
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ includePhoto: false }));
+  });
+
+  it("lets the user skip the cover letter", async () => {
+    const { onSubmit, user } = setup();
+
+    await user.upload(screen.getByLabelText(/cv file/i), cv);
+    await user.type(screen.getByLabelText("Job offer"), "Acme seeks an intern.");
+    await user.click(screen.getByLabelText(/Also write a cover letter/));
+    await user.click(screen.getByRole("button", { name: "Create my application" }));
+
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ includeLetter: false }));
   });
 
   it("shows the number of characters typed", async () => {

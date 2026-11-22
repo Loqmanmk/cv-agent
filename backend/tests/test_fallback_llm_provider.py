@@ -65,6 +65,50 @@ def test_raises_with_every_reason_when_all_are_unavailable() -> None:
     assert "second down" in str(raised.value)
 
 
+def test_the_provider_that_answered_last_is_tried_first() -> None:
+    clock = iter(range(0, 10_000, 1000))  # each call is 1000 s later: every cooldown is over
+    down = RaisingProvider(LLMUnavailableError("busy"))
+    spare = FakeLLMProvider(ANSWER)
+    chain = FallbackLLMProvider([down, spare], clock=lambda: float(next(clock)))
+
+    chain.generate("s", "u", Language)
+    chain.generate("s", "u", Language)
+
+    assert down.calls == 1
+    assert len(spare.calls) == 2
+
+
+class AnswersOnceProvider(LLMProvider):
+    """Answers the first call, then is out of quota."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate[T: BaseModel](
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        response_model: type[T],
+    ) -> T:
+        self.calls += 1
+        if self.calls > 1:
+            raise LLMUnavailableError("out of quota now")
+        return response_model.model_validate(ANSWER.model_dump())
+
+
+def test_the_usual_order_comes_back_when_the_last_good_provider_fails() -> None:
+    clock = iter(range(0, 10_000, 1000))
+    first = RaisingProvider(LLMUnavailableError("busy"))
+    second = AnswersOnceProvider()
+    third = FakeLLMProvider(ANSWER)
+    chain = FallbackLLMProvider([first, second, third], clock=lambda: float(next(clock)))
+
+    chain.generate("s", "u", Language)  # first is busy, second answers
+    chain.generate("s", "u", Language)  # second fails: first, then third
+
+    assert (first.calls, second.calls, len(third.calls)) == (2, 2, 1)
+
+
 def test_requires_at_least_one_provider() -> None:
     with pytest.raises(ValueError, match="At least one provider"):
         FallbackLLMProvider([])

@@ -17,7 +17,7 @@ class SaveApplicationBody(BaseModel):
     source_url: str = Field(default="", max_length=2000)
     status: ApplicationStatus = "saved"
     cv: CV
-    letter: CoverLetter
+    letter: CoverLetter | None = None
     photo_base64: str | None = None
 
 
@@ -37,3 +37,4 @@ class ApplicationSummaryOut(BaseModel):
     source_url: str
     status: ApplicationStatus
     notes: str
+    has_letter: bool

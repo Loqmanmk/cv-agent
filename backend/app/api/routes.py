@@ -42,6 +42,10 @@ def _encode(data: bytes) -> str:
     return base64.b64encode(data).decode("ascii")
 
 
+def _encode_optional(data: bytes | None) -> str | None:
+    return _encode(data) if data is not None else None
+
+
 def _decode_photo(value: str | None) -> bytes | None:
     if not value:
         return None
@@ -69,6 +73,7 @@ def create_application(
     saved_cvs: Annotated[SavedCvService, Depends(get_saved_cv_service)],
     user_id: CurrentUserId,
     include_photo: Annotated[bool, Form()] = True,
+    include_letter: Annotated[bool, Form()] = True,
     cv_file: Annotated[UploadFile | None, File()] = None,
 ) -> ApplicationResponse:
     """Uses the uploaded file, or the saved CV of the user when no file is sent."""
@@ -90,6 +95,7 @@ def create_application(
         include_photo=include_photo,
         cv_language=profile.cv_language,
         structured_cv=saved.structured if saved is not None else None,
+        include_letter=include_letter,
     )
     reservation = quotas.reserve_application(user_id)
     try:
@@ -106,7 +112,7 @@ def create_application(
         language=result.offer.language,
         photo_used=result.photo_used,
         cv_pdf_base64=_encode(result.cv_pdf),
-        letter_pdf_base64=_encode(result.letter_pdf),
+        letter_pdf_base64=_encode_optional(result.letter_pdf),
         original_cv=result.original_cv,
         cv=result.cv,
         letter=result.letter,
@@ -141,7 +147,7 @@ def render_documents(
     )
     return RenderResponse(
         cv_pdf_base64=_encode(documents.cv_pdf),
-        letter_pdf_base64=_encode(documents.letter_pdf),
+        letter_pdf_base64=_encode_optional(documents.letter_pdf),
     )
 
 

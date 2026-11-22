@@ -33,7 +33,7 @@ class SaveRequest:
     source_url: str
     status: ApplicationStatus
     cv: CV
-    letter: CoverLetter
+    letter: CoverLetter | None
     photo_bytes: bytes | None = None
 
 
@@ -111,7 +111,7 @@ class TrackerService:
                 source_url=_safe_source_url(request.source_url),
                 status=request.status,
                 cv_json=request.cv.model_dump_json(),
-                letter_json=request.letter.model_dump_json(),
+                letter_json=request.letter.model_dump_json() if request.letter else None,
                 photo=photo,
                 cv_pdf=documents.cv_pdf,
                 letter_pdf=documents.letter_pdf,

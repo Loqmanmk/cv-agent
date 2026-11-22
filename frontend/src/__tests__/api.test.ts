@@ -16,6 +16,7 @@ const values: ApplicationRequestValues = {
   cvFile: new File(["content"], "cv.docx"),
   jobText: "Acme seeks an intern.",
   includePhoto: true,
+  includeLetter: true,
 };
 
 const renderValues: RenderRequestValues = {

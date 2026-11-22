@@ -75,9 +75,11 @@ function ApplicationRow({ application, busy, onStatus, onNotes, onDelete }: RowP
         <a href={applicationFileUrl(application.id, "cv")} className="text-sm underline">
           CV (PDF)
         </a>
-        <a href={applicationFileUrl(application.id, "letter")} className="text-sm underline">
-          Letter (PDF)
-        </a>
+        {application.hasLetter && (
+          <a href={applicationFileUrl(application.id, "letter")} className="text-sm underline">
+            Letter (PDF)
+          </a>
+        )}
         {application.sourceUrl && (
           <a
             href={application.sourceUrl}

@@ -35,11 +35,11 @@ class LetterHtmlRenderer(Protocol):
 @dataclass(frozen=True)
 class RenderedDocuments:
     cv_pdf: bytes
-    letter_pdf: bytes
+    letter_pdf: bytes | None
 
 
 class DocumentRenderer:
-    """Renders a CV and a cover letter to one-page PDFs."""
+    """Renders a CV, and its cover letter when there is one, to one-page PDFs."""
 
     def __init__(
         self,
@@ -56,7 +56,7 @@ class DocumentRenderer:
     def render(
         self,
         cv: CV,
-        letter: CoverLetter,
+        letter: CoverLetter | None,
         photo: ExtractedImage | None,
         language: str,
     ) -> RenderedDocuments:
@@ -65,7 +65,7 @@ class DocumentRenderer:
             raise UnsupportedLetterLanguageError(f"No document layout for '{language}' yet.")
         return RenderedDocuments(
             cv_pdf=self._render_cv(cv, photo, labels),
-            letter_pdf=self._render_letter(letter, labels),
+            letter_pdf=self._render_letter(letter, labels) if letter is not None else None,
         )
 
     def _render_cv(self, cv: CV, photo: ExtractedImage | None, labels: CVLabels) -> bytes:

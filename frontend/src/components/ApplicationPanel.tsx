@@ -10,7 +10,7 @@ import { base64ToPdfBlob, documentFileName } from "@/lib/pdf";
 import { uploadSavedCv, type SavedCv } from "@/lib/savedCvApi";
 import { saveApplication } from "@/lib/trackerApi";
 
-const CREATE_TIMEOUT_MS = 420_000;
+const CREATE_TIMEOUT_MS = 500_000;
 const RENDER_TIMEOUT_MS = 120_000;
 const TIMEOUT_MESSAGE = "The request took too long. Please try again.";
 const FALLBACK_TITLE = "Application";
@@ -26,7 +26,8 @@ type DoneState = {
   result: ApplicationResult;
   photoRequested: boolean;
   cvUrl: string;
-  letterUrl: string;
+  /** null when no cover letter was asked for. */
+  letterUrl: string | null;
   regenerating: boolean;
   regenerateError: string | null;
   edits: number;
@@ -66,6 +67,10 @@ function pdfUrl(base64: string): string {
   return URL.createObjectURL(base64ToPdfBlob(base64));
 }
 
+function optionalPdfUrl(base64: string | null): string | null {
+  return base64 === null ? null : pdfUrl(base64);
+}
+
 function beginRequest(timeoutMs: number) {
   const controller = new AbortController();
   let timedOut = false;
@@ -103,10 +108,10 @@ export function ApplicationPanel({
   useEffect(() => () => controllerRef.current?.abort(), []);
 
   useEffect(() => {
-    if (cvUrl === null || letterUrl === null) return undefined;
+    if (cvUrl === null) return undefined;
     return () => {
       URL.revokeObjectURL(cvUrl);
-      URL.revokeObjectURL(letterUrl);
+      if (letterUrl !== null) URL.revokeObjectURL(letterUrl);
     };
   }, [cvUrl, letterUrl]);
 
@@ -125,7 +130,12 @@ export function ApplicationPanel({
         cvFile = null;
       }
       const result = await createApplication(
-        { cvFile, jobText: values.jobText, includePhoto: values.includePhoto },
+        {
+          cvFile,
+          jobText: values.jobText,
+          includePhoto: values.includePhoto,
+          includeLetter: values.includeLetter,
+        },
         request.controller.signal,
       );
       setState({
@@ -133,7 +143,7 @@ export function ApplicationPanel({
         result,
         photoRequested: values.includePhoto,
         cvUrl: pdfUrl(result.cvPdfBase64),
-        letterUrl: pdfUrl(result.letterPdfBase64),
+        letterUrl: optionalPdfUrl(result.letterPdfBase64),
         regenerating: false,
         regenerateError: null,
         edits: 0,
@@ -173,7 +183,7 @@ export function ApplicationPanel({
       setState({
         ...current,
         cvUrl: pdfUrl(documents.cvPdfBase64),
-        letterUrl: pdfUrl(documents.letterPdfBase64),
+        letterUrl: optionalPdfUrl(documents.letterPdfBase64),
         regenerating: false,
         regenerateError: null,
         edits: current.edits + 1,
@@ -194,7 +204,7 @@ export function ApplicationPanel({
     try {
       const saved = await saveApplication({
         jobTitle: result.jobTitle.trim() || FALLBACK_TITLE,
-        company: edited.letter.recipient.company || result.company,
+        company: edited.letter?.recipient.company || result.company,
         language: result.language,
         sourceUrl: "",
         cv: edited.cv,
@@ -265,17 +275,19 @@ export function ApplicationPanel({
               >
                 Download CV (PDF)
               </a>
-              <a
-                href={state.letterUrl}
-                download={documentFileName(
-                  "letter",
-                  state.result.cv.header.name,
-                  state.result.language,
-                )}
-                className="font-medium underline"
-              >
-                Download cover letter (PDF)
-              </a>
+              {state.letterUrl !== null && (
+                <a
+                  href={state.letterUrl}
+                  download={documentFileName(
+                    "letter",
+                    state.result.cv.header.name,
+                    state.result.language,
+                  )}
+                  className="font-medium underline"
+                >
+                  Download cover letter (PDF)
+                </a>
+              )}
             </div>
             {state.edits > 0 && (
               <p role="status" className="mt-2 text-green-800">
@@ -283,7 +295,7 @@ export function ApplicationPanel({
               </p>
             )}
             <p className="mt-3 text-gray-700">
-              Read both documents before you send them: the AI can make mistakes.
+              Read your documents before you send them: the AI can make mistakes.
             </p>
             <button
               type="button"

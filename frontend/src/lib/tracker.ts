@@ -31,4 +31,6 @@ export type TrackedApplication = {
   sourceUrl: string;
   status: ApplicationStatus;
   notes: string;
+  /** false when the application was made without a cover letter. */
+  hasLetter: boolean;
 };

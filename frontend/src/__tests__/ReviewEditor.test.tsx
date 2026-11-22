@@ -132,7 +132,7 @@ describe("ReviewEditor", () => {
     await user.type(paragraph, "My opening.");
     const edited = await regenerated(user, onRegenerate);
 
-    expect(edited.letter.paragraphs).toEqual([
+    expect(edited.letter?.paragraphs).toEqual([
       "My opening.",
       "Experience paragraph.",
       "Motivation paragraph.",

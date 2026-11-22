@@ -115,6 +115,26 @@ def test_downloads_both_pdfs_named_after_the_person(clean_engine: Engine, owner:
     )
 
 
+def test_an_application_without_a_letter_has_no_letter_to_download(
+    clean_engine: Engine, owner: uuid.UUID
+) -> None:
+    client = make_client(clean_engine, owner)
+    created = save(client, letter=None)
+    application_id = created.json()["id"]
+
+    assert created.status_code == 201
+    assert created.json()["has_letter"] is False
+    assert client.get(f"/tracker/applications/{application_id}/cv.pdf").status_code == 200
+    assert client.get(f"/tracker/applications/{application_id}/letter.pdf").status_code == 404
+    assert client.get("/tracker/applications").json()[0]["has_letter"] is False
+
+
+def test_an_application_with_a_letter_says_so(clean_engine: Engine, owner: uuid.UUID) -> None:
+    client = make_client(clean_engine, owner)
+
+    assert save(client).json()["has_letter"] is True
+
+
 def test_deletes_an_application(clean_engine: Engine, owner: uuid.UUID) -> None:
     client = make_client(clean_engine, owner)
     application_id = save(client).json()["id"]

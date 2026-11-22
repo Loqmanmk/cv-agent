@@ -12,6 +12,8 @@ export type ApplicationFormValues = {
   cvFile: File | null;
   jobText: string;
   includePhoto: boolean;
+  /** false: only the CV is made, which is faster. */
+  includeLetter: boolean;
   /** Keep the chosen file as the saved CV for the next applications. */
   saveCv: boolean;
 };
@@ -52,6 +54,7 @@ export function ApplicationForm({
   const usesSavedCv = savedCv !== null && replacing !== savedCv.uploadedAt;
   const [jobText, setJobText] = useState("");
   const [includePhoto, setIncludePhoto] = useState(true);
+  const [includeLetter, setIncludeLetter] = useState(true);
   const [errors, setErrors] = useState<ValidationErrors>({});
   const [jobUrl, setJobUrl] = useState("");
   const [fetchState, setFetchState] = useState<FetchState>({ phase: "idle" });
@@ -99,10 +102,11 @@ export function ApplicationForm({
     const found = validateApplication({ cvFile, jobText, usesSavedCv });
     setErrors(found);
     if (found.cvFile || found.jobText) return;
+    const choices = { jobText: jobText.trim(), includePhoto, includeLetter };
     if (usesSavedCv) {
-      onSubmit({ cvFile: null, jobText: jobText.trim(), includePhoto, saveCv: false });
+      onSubmit({ ...choices, cvFile: null, saveCv: false });
     } else if (cvFile) {
-      onSubmit({ cvFile, jobText: jobText.trim(), includePhoto, saveCv: canSaveCv && saveCv });
+      onSubmit({ ...choices, cvFile, saveCv: canSaveCv && saveCv });
     }
   }
 
@@ -257,6 +261,20 @@ export function ApplicationForm({
         />
         <label htmlFor="include-photo" className="text-sm">
           Include my photo
+        </label>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          id="include-letter"
+          type="checkbox"
+          checked={includeLetter}
+          disabled={disabled}
+          onChange={(event) => setIncludeLetter(event.target.checked)}
+        />
+        <label htmlFor="include-letter" className="text-sm">
+          Also write a cover letter{" "}
+          <span className="text-gray-500">(untick for a faster CV only)</span>
         </label>
       </div>
 

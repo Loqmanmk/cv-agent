@@ -26,6 +26,7 @@ SUMMARY_COLUMNS = (
     ApplicationRecord.source_url,
     ApplicationRecord.status,
     ApplicationRecord.notes,
+    ApplicationRecord.letter_pdf.is_not(None).label("has_letter"),
 )
 
 
@@ -40,6 +41,7 @@ class SummaryRow(Protocol):
     source_url: str
     status: str
     notes: str
+    has_letter: bool
 
 
 def _summary(row: SummaryRow) -> ApplicationSummary:
@@ -55,6 +57,7 @@ def _summary(row: SummaryRow) -> ApplicationSummary:
         source_url=row.source_url,
         status=status,
         notes=row.notes,
+        has_letter=bool(row.has_letter),
     )
 
 
@@ -94,7 +97,9 @@ class PostgresApplicationRepository(ApplicationRepository):
                 status=application.status,
                 notes="",
                 cv_json=json.loads(application.cv_json),
-                letter_json=json.loads(application.letter_json),
+                letter_json=(
+                    json.loads(application.letter_json) if application.letter_json else None
+                ),
                 photo=application.photo,
                 cv_pdf=application.cv_pdf,
                 letter_pdf=application.letter_pdf,
@@ -168,6 +173,6 @@ class PostgresApplicationRepository(ApplicationRepository):
             raise ApplicationNotFoundError
         return ApplicationFiles(
             cv_pdf=bytes(row.cv_pdf),
-            letter_pdf=bytes(row.letter_pdf),
+            letter_pdf=bytes(row.letter_pdf) if row.letter_pdf is not None else None,
             applicant_name=_applicant_name(row.cv_json),
         )

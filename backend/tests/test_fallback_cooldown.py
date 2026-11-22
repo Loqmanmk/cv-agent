@@ -19,32 +19,38 @@ def call(provider: FallbackLLMProvider) -> Language:
     return provider.generate("s", "u", Language)
 
 
+def call_failing(provider: FallbackLLMProvider) -> None:
+    with pytest.raises(LLMUnavailableError):
+        call(provider)
+
+
 def test_a_model_without_quota_is_skipped_until_it_resets() -> None:
     clock = Clock()
     quota = RaisingProvider(LLMUnavailableError("quota", retry_after_seconds=3600))
-    provider = FallbackLLMProvider([quota, FakeLLMProvider(ANSWER)], clock)
+    provider = FallbackLLMProvider([quota], clock)
 
-    call(provider)
-    call(provider)
+    call_failing(provider)
+    clock.now = 3599
+    call_failing(provider)
     assert quota.calls == 1
 
     clock.now = 3601
-    call(provider)
+    call_failing(provider)
     assert quota.calls == 2
 
 
 def test_an_overloaded_model_is_skipped_for_a_short_time() -> None:
     clock = Clock()
     busy = RaisingProvider(LLMUnavailableError("busy"))
-    provider = FallbackLLMProvider([busy, FakeLLMProvider(ANSWER)], clock)
+    provider = FallbackLLMProvider([busy], clock)
 
-    call(provider)
+    call_failing(provider)
     clock.now = DEFAULT_COOLDOWN_SECONDS - 1
-    call(provider)
+    call_failing(provider)
     assert busy.calls == 1
 
     clock.now = DEFAULT_COOLDOWN_SECONDS + 1
-    call(provider)
+    call_failing(provider)
     assert busy.calls == 2
 
 

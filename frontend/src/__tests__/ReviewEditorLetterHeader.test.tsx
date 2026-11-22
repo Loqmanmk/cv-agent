@@ -53,7 +53,7 @@ describe("ReviewEditor letter header", () => {
     await user.type(company, "  Coface  ");
     const edited = await regenerate(user, onRegenerate);
 
-    expect(edited.letter.recipient.company).toBe("Coface");
+    expect(edited.letter?.recipient.company).toBe("Coface");
   });
 
   it("sends the contact and the address", async () => {
@@ -63,8 +63,8 @@ describe("ReviewEditor letter header", () => {
     await user.type(screen.getByLabelText("Company address"), "1 rue Exemple, Paris");
     const edited = await regenerate(user, onRegenerate);
 
-    expect(edited.letter.recipient.contact).toBe("Mme Martin");
-    expect(edited.letter.recipient.address).toBe("1 rue Exemple, Paris");
+    expect(edited.letter?.recipient.contact).toBe("Mme Martin");
+    expect(edited.letter?.recipient.address).toBe("1 rue Exemple, Paris");
   });
 
   it("sends an edited subject", async () => {
@@ -75,7 +75,7 @@ describe("ReviewEditor letter header", () => {
     await user.type(subject, "Candidature spontanée");
     const edited = await regenerate(user, onRegenerate);
 
-    expect(edited.letter.subject).toBe("Candidature spontanée");
+    expect(edited.letter?.subject).toBe("Candidature spontanée");
   });
 
   it("blocks regeneration when the subject is empty", async () => {

@@ -91,6 +91,24 @@ describe("ApplicationPanel", () => {
     expect(letterLink).toHaveAttribute("download", "Lettre_de_motivation_Jane_Doe.pdf");
   });
 
+  it("asks for no letter and shows only the CV when the letter is unticked", async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(makeResultBody({ letter: null, letter_pdf_base64: null })),
+    );
+    const { user } = setup();
+
+    await user.upload(screen.getByLabelText(/cv file/i), new File(["content"], "cv.docx"));
+    await user.type(screen.getByLabelText("Job offer"), "Acme seeks an intern.");
+    await user.click(screen.getByLabelText(/Also write a cover letter/));
+    await user.click(screen.getByRole("button", { name: "Create my application" }));
+
+    expect(await screen.findByRole("link", { name: "Download CV (PDF)" })).toBeInTheDocument();
+    const sent = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((sent.body as FormData).get("include_letter")).toBe("false");
+    expect(screen.queryByRole("link", { name: /cover letter/ })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Subject")).not.toBeInTheDocument();
+  });
+
   it("shows the review screen with the tailored text", async () => {
     fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
     const { user } = setup();

@@ -23,10 +23,10 @@ class ApplicationResponse(BaseModel):
     language: str
     photo_used: bool
     cv_pdf_base64: str
-    letter_pdf_base64: str
+    letter_pdf_base64: str | None
     original_cv: CV
     cv: CV
-    letter: CoverLetter
+    letter: CoverLetter | None
     photo_base64: str | None
     report: MatchReportOut
 
@@ -35,14 +35,14 @@ class RenderRequestBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cv: CV
-    letter: CoverLetter
+    letter: CoverLetter | None = None
     language: OfferLanguage
     photo_base64: str | None = None
 
 
 class RenderResponse(BaseModel):
     cv_pdf_base64: str
-    letter_pdf_base64: str
+    letter_pdf_base64: str | None
 
 
 class JobUrlRequest(BaseModel):

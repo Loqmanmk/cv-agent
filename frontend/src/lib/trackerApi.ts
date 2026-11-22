@@ -8,7 +8,7 @@ export type SaveApplicationValues = {
   language: string;
   sourceUrl: string;
   cv: Cv;
-  letter: CoverLetter;
+  letter: CoverLetter | null;
   photoBase64: string | null;
 };
 
@@ -21,6 +21,7 @@ type SummaryBody = {
   source_url: string;
   status: ApplicationStatus;
   notes: string;
+  has_letter?: boolean;
 };
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
@@ -40,7 +41,8 @@ function isSummaryBody(value: unknown): value is SummaryBody {
     typeof value.source_url === "string" &&
     typeof value.status === "string" &&
     isStatus(value.status) &&
-    typeof value.notes === "string"
+    typeof value.notes === "string" &&
+    (value.has_letter === undefined || typeof value.has_letter === "boolean")
   );
 }
 
@@ -54,6 +56,7 @@ function toTracked(body: SummaryBody): TrackedApplication {
     sourceUrl: body.source_url,
     status: body.status,
     notes: body.notes,
+    hasLetter: body.has_letter ?? true,
   };
 }
 

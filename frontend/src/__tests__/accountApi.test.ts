@@ -127,6 +127,7 @@ describe("usage", () => {
         cvFile: new File(["x"], "cv.docx"),
         jobText: "Acme seeks an intern.",
         includePhoto: true,
+        includeLetter: true,
       }),
     ).rejects.toMatchObject({ message: detail, status: 402 });
   });

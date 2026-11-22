@@ -28,10 +28,11 @@ class NewApplication:
     source_url: str
     status: ApplicationStatus
     cv_json: str
-    letter_json: str
+    # None when the user asked for no cover letter.
+    letter_json: str | None
     photo: bytes | None
     cv_pdf: bytes
-    letter_pdf: bytes
+    letter_pdf: bytes | None
 
 
 @dataclass(frozen=True)
@@ -44,12 +45,13 @@ class ApplicationSummary:
     source_url: str
     status: ApplicationStatus
     notes: str
+    has_letter: bool = True
 
 
 @dataclass(frozen=True)
 class ApplicationFiles:
     cv_pdf: bytes
-    letter_pdf: bytes
+    letter_pdf: bytes | None
     applicant_name: str = ""
 
 

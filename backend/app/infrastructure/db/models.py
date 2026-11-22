@@ -76,10 +76,10 @@ class ApplicationRecord(Base):
     status: Mapped[str] = mapped_column(Text)
     notes: Mapped[str] = mapped_column(Text, server_default="")
     cv_json: Mapped[dict[str, object]] = mapped_column(JSONB)
-    letter_json: Mapped[dict[str, object]] = mapped_column(JSONB)
+    letter_json: Mapped[dict[str, object] | None] = mapped_column(JSONB)
     photo: Mapped[bytes | None] = mapped_column(LargeBinary)
     cv_pdf: Mapped[bytes] = mapped_column(LargeBinary)
-    letter_pdf: Mapped[bytes] = mapped_column(LargeBinary)
+    letter_pdf: Mapped[bytes | None] = mapped_column(LargeBinary)
 
 
 class UserSession(Base):

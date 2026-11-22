@@ -13,7 +13,7 @@ from app.api.tracker_schemas import (
     UpdateApplicationBody,
 )
 from app.domain.document import InvalidPhotoError
-from app.domain.tracker import ApplicationSummary
+from app.domain.tracker import ApplicationNotFoundError, ApplicationSummary
 from app.services.tracker_service import SaveRequest, TrackerService, document_filename
 
 router = APIRouter(prefix="/tracker")
@@ -42,6 +42,7 @@ def _out(summary: ApplicationSummary) -> ApplicationSummaryOut:
         source_url=summary.source_url,
         status=summary.status,
         notes=summary.notes,
+        has_letter=summary.has_letter,
     )
 
 
@@ -118,5 +119,7 @@ def download_letter(
 ) -> Response:
     summary = service.get(user_id, application_id)
     files = service.files(user_id, application_id)
+    if files.letter_pdf is None:
+        raise ApplicationNotFoundError  # this application was made without a letter
     filename = document_filename("letter", files.applicant_name, summary.language)
     return _pdf(files.letter_pdf, filename)

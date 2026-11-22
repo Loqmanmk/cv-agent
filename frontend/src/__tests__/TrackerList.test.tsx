@@ -85,6 +85,16 @@ describe("TrackerList", () => {
     );
   });
 
+  it("offers no letter download for an application made without a letter", async () => {
+    route({
+      "GET /tracker/applications": () => jsonResponse([{ ...summary, has_letter: false }]),
+    });
+    render(<TrackerList />);
+
+    expect(await screen.findByRole("link", { name: "CV (PDF)" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Letter (PDF)" })).not.toBeInTheDocument();
+  });
+
   it("explains what to do when there is nothing yet", async () => {
     route({ "GET /tracker/applications": () => jsonResponse([]) });
     render(<TrackerList />);

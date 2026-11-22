@@ -24,15 +24,26 @@ def make_request(photo: bytes | None = None, language: str = "fr") -> RenderRequ
     return RenderRequest(cv=make_cv(), letter=make_letter(), language=language, photo_bytes=photo)
 
 
-def test_renders_the_cv_then_the_letter() -> None:
+def test_renders_the_cv_and_the_letter() -> None:
     service, converter = make_service()
 
     documents = service.render(make_request())
 
     assert documents.cv_pdf == FAKE_PDF
     assert documents.letter_pdf == FAKE_PDF
-    assert "Jane Doe" in converter.pages[0]
-    assert "Objet : Candidature" in converter.pages[1]
+    assert any("Jane Doe" in page for page in converter.pages)
+    assert any("Objet : Candidature" in page for page in converter.pages)
+
+
+def test_renders_only_the_cv_without_a_letter() -> None:
+    service, converter = make_service()
+    request = RenderRequest(cv=make_cv(), letter=None, language="fr")
+
+    documents = service.render(request)
+
+    assert documents.cv_pdf == FAKE_PDF
+    assert documents.letter_pdf is None
+    assert len(converter.pages) == 1
 
 
 def test_renders_the_text_as_edited_by_the_user() -> None:
@@ -41,7 +52,7 @@ def test_renders_the_text_as_edited_by_the_user() -> None:
 
     service.render(RenderRequest(edited, make_letter(), "fr"))
 
-    assert "Edited by the user." in converter.pages[0]
+    assert any("Edited by the user." in page for page in converter.pages)
 
 
 def test_embeds_a_sanitized_photo() -> None:
@@ -49,7 +60,7 @@ def test_embeds_a_sanitized_photo() -> None:
 
     service.render(make_request(photo=make_png(300, 353)))
 
-    assert "data:image/png;base64," in converter.pages[0]
+    assert any("data:image/png;base64," in page for page in converter.pages)
 
 
 def test_no_photo_means_no_image() -> None:
@@ -57,7 +68,7 @@ def test_no_photo_means_no_image() -> None:
 
     service.render(make_request(photo=None))
 
-    assert "<img" not in converter.pages[0]
+    assert all("<img" not in page for page in converter.pages)
 
 
 def test_an_empty_photo_is_treated_as_no_photo() -> None:
@@ -65,7 +76,7 @@ def test_an_empty_photo_is_treated_as_no_photo() -> None:
 
     service.render(make_request(photo=b""))
 
-    assert "<img" not in converter.pages[0]
+    assert all("<img" not in page for page in converter.pages)
 
 
 def test_an_invalid_photo_is_refused() -> None:

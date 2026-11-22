@@ -75,6 +75,16 @@ def test_renders_the_documents() -> None:
     assert base64.b64decode(response.json()["letter_pdf_base64"]) == FAKE_PDF
 
 
+def test_renders_only_the_cv_when_there_is_no_letter() -> None:
+    client, converter = make_render_client()
+
+    response = client.post("/render", json=payload(letter=None))
+
+    assert response.status_code == 200
+    assert response.json()["letter_pdf_base64"] is None
+    assert len(converter.pages) == 1
+
+
 def test_renders_the_edited_text() -> None:
     client, converter = make_render_client()
     cv = make_cv().model_dump()
@@ -82,7 +92,7 @@ def test_renders_the_edited_text() -> None:
 
     client.post("/render", json=payload(cv=cv))
 
-    assert "Edited by the user." in converter.pages[0]
+    assert any("Edited by the user." in page for page in converter.pages)
 
 
 def test_sends_the_photo_back_into_the_cv() -> None:
@@ -92,7 +102,7 @@ def test_sends_the_photo_back_into_the_cv() -> None:
     response = client.post("/render", json=payload(photo_base64=photo))
 
     assert response.status_code == 200
-    assert "data:image/png;base64," in converter.pages[0]
+    assert any("data:image/png;base64," in page for page in converter.pages)
 
 
 def test_refuses_a_photo_that_is_not_base64() -> None:

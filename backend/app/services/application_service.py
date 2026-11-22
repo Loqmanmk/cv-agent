@@ -70,6 +70,8 @@ class ApplicationRequest:
     cv_language: OfferLanguage = "fr"
     # The CV already read by the AI on an earlier application, to skip reading it again.
     structured_cv: CV | None = None
+    # Without a letter, the application is faster: one AI step and one PDF less.
+    include_letter: bool = True
 
 
 @dataclass(frozen=True)
@@ -79,9 +81,9 @@ class ApplicationResult:
     structured_cv: CV
     original_cv: CV
     cv: CV
-    letter: CoverLetter
+    letter: CoverLetter | None
     cv_pdf: bytes
-    letter_pdf: bytes
+    letter_pdf: bytes | None
     photo: ExtractedImage | None
     report: MatchReport
 
@@ -119,19 +121,7 @@ class ApplicationService:
         if cv_language != offer.language:
             logger.info("stage: translating the CV from %s to %s", cv_language, offer.language)
             cv = CVTranslator(self._private_llm).translate(cv, offer.language)
-        logger.info("stage: tailoring the CV")
-        tailored = CVTailor(self._private_llm).tailor(cv, offer)
-        logger.info("stage: writing the letter")
-        body = LetterWriter(self._private_llm).write(tailored, offer, request.gender)
-        sender = LetterSender(
-            name=tailored.header.name,
-            email=tailored.header.email,
-            phone=tailored.header.phone,
-            address=request.address,
-            city=request.city,
-            gender=request.gender,
-        )
-        letter = LetterAssembler().assemble(body, offer, sender, request.today)
+        tailored, letter = self._tailor_and_write(cv, offer, request)
         photo = self._select_photo(parsed.images, request.include_photo)
         logger.info("stage: rendering the PDFs")
         documents = self._renderer.render(tailored, letter, photo, offer.language)
@@ -146,6 +136,35 @@ class ApplicationService:
             photo=photo,
             report=build_match_report(cv, tailored, offer),
         )
+
+    def _tailor_and_write(
+        self, cv: CV, offer: JobOffer, request: ApplicationRequest
+    ) -> tuple[CV, CoverLetter | None]:
+        """The tailored CV and the letter, written at the same time.
+
+        The letter is written from the full CV, which holds the same true facts as the
+        tailored one, so it does not have to wait for the tailoring.
+        """
+        if not request.include_letter:
+            logger.info("stage: tailoring the CV (no letter asked)")
+            return CVTailor(self._private_llm).tailor(cv, offer), None
+        logger.info("stage: tailoring the CV and writing the letter at the same time")
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            letter = pool.submit(self._write_letter, cv, offer, request)
+            tailored = CVTailor(self._private_llm).tailor(cv, offer)
+            return tailored, letter.result()
+
+    def _write_letter(self, cv: CV, offer: JobOffer, request: ApplicationRequest) -> CoverLetter:
+        body = LetterWriter(self._private_llm).write(cv, offer, request.gender)
+        sender = LetterSender(
+            name=cv.header.name,
+            email=cv.header.email,
+            phone=cv.header.phone,
+            address=request.address,
+            city=request.city,
+            gender=request.gender,
+        )
+        return LetterAssembler().assemble(body, offer, sender, request.today)
 
     def _read_offer_and_cv(
         self, request: ApplicationRequest, parsed: ParsedDocument

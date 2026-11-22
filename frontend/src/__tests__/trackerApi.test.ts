@@ -82,6 +82,7 @@ describe("saveApplication", () => {
       sourceUrl: "",
       status: "saved",
       notes: "",
+      hasLetter: true,
     });
   });
 

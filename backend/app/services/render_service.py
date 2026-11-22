@@ -12,7 +12,7 @@ MAX_DOCUMENT_CHARS = 100_000
 @dataclass(frozen=True)
 class RenderRequest:
     cv: CV
-    letter: CoverLetter
+    letter: CoverLetter | None
     language: str
     photo_bytes: bytes | None = None
 
@@ -25,7 +25,8 @@ class RenderService:
         self._sanitizer = sanitizer
 
     def render(self, request: RenderRequest) -> RenderedDocuments:
-        size = len(request.cv.model_dump_json()) + len(request.letter.model_dump_json())
+        letter_size = len(request.letter.model_dump_json()) if request.letter else 0
+        size = len(request.cv.model_dump_json()) + letter_size
         if size > MAX_DOCUMENT_CHARS:
             raise InvalidApplicationInputError("The documents are too long.")
         photo = self._sanitizer.sanitize(request.photo_bytes) if request.photo_bytes else None

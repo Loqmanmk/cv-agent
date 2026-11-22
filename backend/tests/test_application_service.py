@@ -97,6 +97,7 @@ def make_request(
     include_photo: bool = True,
     cv_language: OfferLanguage = "fr",
     structured_cv: CV | None = None,
+    include_letter: bool = True,
 ) -> ApplicationRequest:
     return ApplicationRequest(
         cv_filename=filename,
@@ -109,6 +110,7 @@ def make_request(
         include_photo=include_photo,
         cv_language=cv_language,
         structured_cv=structured_cv,
+        include_letter=include_letter,
     )
 
 
@@ -120,8 +122,21 @@ def test_creates_the_tailored_cv_and_the_letter_pdfs() -> None:
     assert result.cv_pdf == FAKE_PDF
     assert result.letter_pdf == FAKE_PDF
     assert result.cv.profile == "Rewritten profile."
-    assert "Rewritten profile." in converter.pages[0]
-    assert "Fait à Oujda, le 6 novembre 2026" in converter.pages[1]
+    assert any("Rewritten profile." in page for page in converter.pages)
+    assert any("Fait à Oujda, le 6 novembre 2026" in page for page in converter.pages)
+
+
+def test_no_letter_is_written_when_the_user_does_not_want_one() -> None:
+    offer, cv, tailored, _ = ai_answers()
+    service, provider, converter = make_service([offer, cv, tailored])
+
+    result = service.create(make_request(include_letter=False))
+
+    assert result.letter is None
+    assert result.letter_pdf is None
+    assert result.cv_pdf == FAKE_PDF
+    assert len(provider.calls) == 3
+    assert len(converter.pages) == 1
 
 
 def test_the_photo_of_the_upload_is_embedded_in_the_cv() -> None:
@@ -130,7 +145,7 @@ def test_the_photo_of_the_upload_is_embedded_in_the_cv() -> None:
     result = service.create(make_request(content=make_docx(with_photo=True)))
 
     assert result.photo_used is True
-    assert "data:image/png;base64," in converter.pages[0]
+    assert any("data:image/png;base64," in page for page in converter.pages)
 
 
 def test_the_photo_can_be_disabled() -> None:
@@ -139,7 +154,7 @@ def test_the_photo_can_be_disabled() -> None:
     result = service.create(make_request(content=make_docx(with_photo=True), include_photo=False))
 
     assert result.photo_used is False
-    assert "<img" not in converter.pages[0]
+    assert all("<img" not in page for page in converter.pages)
 
 
 def test_a_file_without_a_photo_reports_it() -> None:
@@ -238,7 +253,7 @@ def test_a_photo_in_an_unsupported_format_is_skipped_and_not_fatal() -> None:
     result = service.create(make_request(content=buffer.getvalue()))
 
     assert result.photo_used is False
-    assert "<img" not in converter.pages[0]
+    assert all("<img" not in page for page in converter.pages)
 
 
 def test_the_result_keeps_the_original_cv_next_to_the_tailored_one() -> None:
@@ -264,8 +279,8 @@ def test_a_german_offer_translates_the_cv_before_tailoring() -> None:
     assert "German" in provider.calls[2][0]
     assert result.original_cv.header.headline == "Ingenieurstudentin"
     assert result.cv.profile == "Neu geschriebenes Profil."
-    assert "Berufserfahrung" in converter.pages[0]
-    assert "Sehr geehrte Damen und Herren," in converter.pages[1]
+    assert any("Berufserfahrung" in page for page in converter.pages)
+    assert any("Sehr geehrte Damen und Herren," in page for page in converter.pages)
 
 
 def test_contact_details_never_reach_the_ai_during_translation() -> None:

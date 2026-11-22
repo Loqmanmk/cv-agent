@@ -15,9 +15,9 @@ logger = logging.getLogger(__name__)
 TEMPERATURE = 0.2
 MAX_ATTEMPTS = 4
 # "This model is currently experiencing high demand": waiting rarely helps, and other models
-# are available, so one quick retry only before falling back to the next model.
+# are available, so the next model is tried at once, without a retry.
 OVERLOADED_CODE = 503
-MAX_OVERLOADED_ATTEMPTS = 2
+MAX_OVERLOADED_ATTEMPTS = 1
 BASE_DELAY_SECONDS = 2.0
 RETRYABLE_CODES = {500, 502, 503, 504}
 UNAVAILABLE_CODES = RETRYABLE_CODES | {429}

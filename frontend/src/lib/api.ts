@@ -6,6 +6,8 @@ export type ApplicationRequestValues = {
   cvFile: File | null;
   jobText: string;
   includePhoto: boolean;
+  /** false: no cover letter, and a faster answer. */
+  includeLetter: boolean;
 };
 
 export type ApplicationResult = {
@@ -14,24 +16,25 @@ export type ApplicationResult = {
   language: string;
   photoUsed: boolean;
   cvPdfBase64: string;
-  letterPdfBase64: string;
+  /** null when no cover letter was asked for. */
+  letterPdfBase64: string | null;
   originalCv: Cv;
   cv: Cv;
-  letter: CoverLetter;
+  letter: CoverLetter | null;
   photoBase64: string | null;
   report: MatchReport;
 };
 
 export type RenderRequestValues = {
   cv: Cv;
-  letter: CoverLetter;
+  letter: CoverLetter | null;
   language: string;
   photoBase64: string | null;
 };
 
 export type RenderedDocuments = {
   cvPdfBase64: string;
-  letterPdfBase64: string;
+  letterPdfBase64: string | null;
 };
 
 export type FetchedJobText = {
@@ -61,16 +64,16 @@ type ResultBody = {
   language: string;
   photo_used: boolean;
   cv_pdf_base64: string;
-  letter_pdf_base64: string;
+  letter_pdf_base64: string | null;
   original_cv: Cv;
   cv: Cv;
-  letter: CoverLetter;
+  letter: CoverLetter | null;
   photo_base64: string | null;
 };
 
 type RenderBody = {
   cv_pdf_base64: string;
-  letter_pdf_base64: string;
+  letter_pdf_base64: string | null;
 };
 
 type JobTextBody = {
@@ -93,6 +96,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function isStringOrNull(value: unknown): boolean {
+  return value === null || typeof value === "string";
+}
+
 function isResultBody(body: unknown): body is ResultBody {
   if (!isObject(body)) return false;
   return (
@@ -101,11 +108,12 @@ function isResultBody(body: unknown): body is ResultBody {
     typeof body.language === "string" &&
     typeof body.photo_used === "boolean" &&
     typeof body.cv_pdf_base64 === "string" &&
-    typeof body.letter_pdf_base64 === "string" &&
+    isStringOrNull(body.letter_pdf_base64) &&
     isObject(body.original_cv) &&
     isObject(body.cv) &&
-    isObject(body.letter) &&
-    (body.photo_base64 === null || typeof body.photo_base64 === "string")
+    (body.letter === null || isObject(body.letter)) &&
+    (body.letter === null) === (body.letter_pdf_base64 === null) &&
+    isStringOrNull(body.photo_base64)
   );
 }
 
@@ -140,7 +148,7 @@ function isRenderBody(body: unknown): body is RenderBody {
   return (
     isObject(body) &&
     typeof body.cv_pdf_base64 === "string" &&
-    typeof body.letter_pdf_base64 === "string"
+    isStringOrNull(body.letter_pdf_base64)
   );
 }
 
@@ -242,6 +250,7 @@ export async function createApplication(
   if (values.cvFile !== null) body.append("cv_file", values.cvFile);
   body.append("job_text", values.jobText);
   body.append("include_photo", String(values.includePhoto));
+  body.append("include_letter", String(values.includeLetter));
 
   const data = await post("/applications", { body }, signal);
   if (!isResultBody(data)) {

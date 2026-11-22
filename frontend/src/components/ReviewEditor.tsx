@@ -28,7 +28,8 @@ import type { CoverLetter, Cv } from "@/lib/types";
 
 export type EditedDocuments = {
   cv: Cv;
-  letter: CoverLetter;
+  /** null when the application was made without a cover letter. */
+  letter: CoverLetter | null;
   photoBase64: string | null;
 };
 
@@ -91,18 +92,20 @@ export function ReviewEditor({
   saveError = null,
 }: Props) {
   const [cv, setCv] = useState<Cv>(result.cv);
-  const [letter, setLetter] = useState<CoverLetter>(result.letter);
+  const [letter, setLetter] = useState<CoverLetter | null>(result.letter);
   const [drafts, setDrafts] = useState<SkillDraft[]>(() => toSkillDrafts(result.cv.skills));
   const [includePhoto, setIncludePhoto] = useState(true);
-  const problems = [...findProblems(drafts), ...findLetterProblems(letter)];
+  const problems = [...findProblems(drafts), ...(letter ? findLetterProblems(letter) : [])];
   const original = result.originalCv;
-  const editableParagraphs = letter.paragraphs.slice(0, -1);
-  const closing = letter.paragraphs.at(-1);
+
+  function editLetter(change: (current: CoverLetter) => CoverLetter) {
+    setLetter((current) => (current === null ? current : change(current)));
+  }
 
   function currentEdits(): EditedDocuments {
     return {
       cv: buildEditedCv(cv, drafts),
-      letter: buildEditedLetter(letter),
+      letter: letter === null ? null : buildEditedLetter(letter),
       photoBase64: includePhoto ? result.photoBase64 : null,
     };
   }
@@ -308,38 +311,42 @@ export function ReviewEditor({
         </p>
       </Row>
 
-      <h3 className="mt-6 font-semibold">Cover letter</h3>
-      <LetterHeaderEditor
-        letter={letter}
-        onSubjectChange={(value) => setLetter((current) => setLetterSubject(current, value))}
-        onRecipientChange={(field, value) =>
-          setLetter((current) => setRecipientField(current, field, value))
-        }
-      />
-      <div className="mt-2 space-y-3">
-        {editableParagraphs.map((paragraph, index) => (
-          <div key={index}>
-            <label htmlFor={`review-paragraph-${index}`} className="text-sm font-medium">
-              Letter paragraph {index + 1}
-            </label>
-            <textarea
-              id={`review-paragraph-${index}`}
-              rows={5}
-              value={paragraph}
-              onChange={(event) => {
-                const value = event.target.value;
-                setLetter((current) => setLetterParagraph(current, index, value));
-              }}
-              className={FIELD}
-            />
+      {letter !== null && (
+        <>
+          <h3 className="mt-6 font-semibold">Cover letter</h3>
+          <LetterHeaderEditor
+            letter={letter}
+            onSubjectChange={(value) => editLetter((current) => setLetterSubject(current, value))}
+            onRecipientChange={(field, value) =>
+              editLetter((current) => setRecipientField(current, field, value))
+            }
+          />
+          <div className="mt-2 space-y-3">
+            {letter.paragraphs.slice(0, -1).map((paragraph, index) => (
+              <div key={index}>
+                <label htmlFor={`review-paragraph-${index}`} className="text-sm font-medium">
+                  Letter paragraph {index + 1}
+                </label>
+                <textarea
+                  id={`review-paragraph-${index}`}
+                  rows={5}
+                  value={paragraph}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    editLetter((current) => setLetterParagraph(current, index, value));
+                  }}
+                  className={FIELD}
+                />
+              </div>
+            ))}
+            {letter.paragraphs.length > 0 && (
+              <p className="text-sm text-gray-600">
+                <span className="font-medium">Closing (fixed):</span> {letter.paragraphs.at(-1)}
+              </p>
+            )}
           </div>
-        ))}
-        {closing && (
-          <p className="text-sm text-gray-600">
-            <span className="font-medium">Closing (fixed):</span> {closing}
-          </p>
-        )}
-      </div>
+        </>
+      )}
 
       {problems.map((problem) => (
         <p key={problem} role="alert" className="mt-4 text-sm text-red-700">
@@ -372,7 +379,7 @@ export function ReviewEditor({
             {saving ? "Saving…" : "Save to my applications"}
           </button>
           <p className="mt-1 text-xs text-gray-500">
-            Saves the text as you see it here, with both PDFs. Each click adds a new entry.
+            Saves the text as you see it here, with its PDFs. Each click adds a new entry.
           </p>
           {saveMessage && (
             <p role="status" className="mt-2 text-sm text-green-700">
