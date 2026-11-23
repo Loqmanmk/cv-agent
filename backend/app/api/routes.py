@@ -17,6 +17,7 @@ from app.api.dependencies import (
     enforce_fetch_rate_limit,
     enforce_rate_limit,
     enforce_render_rate_limit,
+    enforce_score_rate_limit,
     get_application_service,
     get_job_fetch_service,
     get_job_runner,
@@ -28,12 +29,14 @@ from app.api.schemas import (
     JobOut,
     JobTextResponse,
     JobUrlRequest,
+    MatchPreviewOut,
     MatchReportOut,
     MatchScoreOut,
     MissingSkillOut,
     RenderRequestBody,
     RenderResponse,
 )
+from app.domain.cv import CV
 from app.domain.document import MAX_CV_BYTES, InvalidPhotoError
 from app.domain.jobs import GenerationJob, JobLimitError
 from app.domain.saved_cv import SavedCv
@@ -41,9 +44,11 @@ from app.services.application_service import (
     ApplicationRequest,
     ApplicationResult,
     ApplicationService,
+    ScoreRequest,
 )
 from app.services.job_fetch_service import JobFetchService
 from app.services.job_runner import JobRunner, StageReporter
+from app.services.match_report import MatchReport
 from app.services.profile_service import ProfileService
 from app.services.quota_service import QuotaService
 from app.services.render_service import RenderRequest, RenderService
@@ -77,6 +82,40 @@ def health() -> dict[str, str]:
 
 
 @router.post(
+    "/applications/score",
+    response_model=MatchPreviewOut,
+    dependencies=[Depends(require_verified_user), Depends(enforce_score_rate_limit)],
+)
+def score_application(
+    job_text: Annotated[str, Form()],
+    service: Annotated[ApplicationService, Depends(get_application_service)],
+    saved_cvs: Annotated[SavedCvService, Depends(get_saved_cv_service)],
+    user_id: CurrentUserId,
+    cv_file: Annotated[UploadFile | None, File()] = None,
+) -> MatchPreviewOut:
+    """The match score of the CV for the offer, before creating anything.
+
+    Not counted in the monthly quota: the user checks first and creates only when it is
+    worth it. What the AI read is kept a short while, so creating just after is faster.
+    """
+    saved, cv_filename, cv_content = _cv_to_use(saved_cvs, user_id, cv_file)
+    preview = service.preview(
+        ScoreRequest(
+            cv_filename=cv_filename,
+            cv_content=cv_content,
+            job_text=job_text,
+            structured_cv=saved.structured if saved is not None else None,
+        )
+    )
+    _remember_structure(saved_cvs, user_id, saved, preview.structured_cv)
+    return MatchPreviewOut(
+        job_title=preview.offer.title,
+        company=preview.offer.company,
+        report=_report_out(preview.report),
+    )
+
+
+@router.post(
     "/applications",
     response_model=JobOut,
     status_code=202,
@@ -101,12 +140,7 @@ def create_application(
     Uses the uploaded file, or the saved CV of the user when no file is sent.
     """
     profile = profiles.require_complete(user_id)
-    saved = None
-    if cv_file is None:
-        saved = saved_cvs.require(user_id)
-        cv_filename, cv_content = saved.filename, saved.content
-    else:
-        cv_filename, cv_content = cv_file.filename or "", cv_file.file.read(MAX_CV_BYTES + 1)
+    saved, cv_filename, cv_content = _cv_to_use(saved_cvs, user_id, cv_file)
     request = ApplicationRequest(
         cv_filename=cv_filename,
         cv_content=cv_content,
@@ -129,7 +163,7 @@ def create_application(
             # A failed application is not counted: users only use their quota for real documents.
             quotas.release(user_id, reservation)
             raise
-        _remember_structure(saved_cvs, user_id, saved, result)
+        _remember_structure(saved_cvs, user_id, saved, result.structured_cv)
         return _application_response(result).model_dump(mode="json")
 
     try:
@@ -158,17 +192,27 @@ def get_application_job(
     return _job_out(job)
 
 
+def _cv_to_use(
+    saved_cvs: SavedCvService, user_id: uuid.UUID, cv_file: UploadFile | None
+) -> tuple[SavedCv | None, str, bytes]:
+    """The uploaded file, or the saved CV of the user when no file is sent."""
+    if cv_file is not None:
+        return None, cv_file.filename or "", cv_file.file.read(MAX_CV_BYTES + 1)
+    saved = saved_cvs.require(user_id)
+    return saved, saved.filename, saved.content
+
+
 def _remember_structure(
     saved_cvs: SavedCvService,
     user_id: uuid.UUID,
     saved: SavedCv | None,
-    result: ApplicationResult,
+    structured: CV,
 ) -> None:
     """Keeps the CV as read, so the next application skips that step. Never fails the job."""
     if saved is None or saved.structured is not None:
         return
     try:
-        saved_cvs.remember_structure(user_id, saved.content, result.structured_cv)
+        saved_cvs.remember_structure(user_id, saved.content, structured)
     except Exception:  # noqa: BLE001 - the documents are ready; this is only a speed-up
         logger.warning("Could not keep the structure of the saved CV", exc_info=True)
 
@@ -200,15 +244,19 @@ def _application_response(result: ApplicationResult) -> ApplicationResponse:
         cv=result.cv,
         letter=result.letter,
         photo_base64=_encode(result.photo.data) if result.photo else None,
-        report=MatchReportOut(
-            matched_skills=result.report.matched_skills,
-            missing_skills=[
-                MissingSkillOut(name=skill.name, required=skill.required, group=skill.group)
-                for skill in result.report.missing_skills
-            ],
-            changes=result.report.changes,
-            score=MatchScoreOut(**asdict(result.report.score)),
-        ),
+        report=_report_out(result.report),
+    )
+
+
+def _report_out(report: MatchReport) -> MatchReportOut:
+    return MatchReportOut(
+        matched_skills=report.matched_skills,
+        missing_skills=[
+            MissingSkillOut(name=skill.name, required=skill.required, group=skill.group)
+            for skill in report.missing_skills
+        ],
+        changes=report.changes,
+        score=MatchScoreOut(**asdict(report.score)),
     )
 
 

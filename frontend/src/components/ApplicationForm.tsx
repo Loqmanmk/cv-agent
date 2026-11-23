@@ -20,6 +20,9 @@ export type ApplicationFormValues = {
 
 type Props = {
   onSubmit: (values: ApplicationFormValues) => void;
+  /** Shows "Check my match score": the score of the CV for the offer, before creating. */
+  onCheckScore?: (values: ApplicationFormValues) => void;
+  checking?: boolean;
   disabled?: boolean;
   savedCv?: SavedCv | null;
   /** Shows the "save this CV" choice. Off when nothing can store the CV. */
@@ -42,6 +45,8 @@ function isAbortError(error: unknown): boolean {
 
 export function ApplicationForm({
   onSubmit,
+  onCheckScore,
+  checking = false,
   disabled = false,
   savedCv = null,
   canSaveCv = false,
@@ -97,17 +102,26 @@ export function ApplicationForm({
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  /** The values of the form, or null after showing what is missing. */
+  function collect(): ApplicationFormValues | null {
     const found = validateApplication({ cvFile, jobText, usesSavedCv });
     setErrors(found);
-    if (found.cvFile || found.jobText) return;
+    if (found.cvFile || found.jobText) return null;
     const choices = { jobText: jobText.trim(), includePhoto, includeLetter };
-    if (usesSavedCv) {
-      onSubmit({ ...choices, cvFile: null, saveCv: false });
-    } else if (cvFile) {
-      onSubmit({ ...choices, cvFile, saveCv: canSaveCv && saveCv });
-    }
+    if (usesSavedCv) return { ...choices, cvFile: null, saveCv: false };
+    if (cvFile) return { ...choices, cvFile, saveCv: canSaveCv && saveCv };
+    return null;
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = collect();
+    if (values) onSubmit(values);
+  }
+
+  function handleCheckScore() {
+    const values = collect();
+    if (values && onCheckScore) onCheckScore(values);
   }
 
   const fetching = fetchState.phase === "loading";
@@ -278,13 +292,30 @@ export function ApplicationForm({
         </label>
       </div>
 
-      <button
-        type="submit"
-        disabled={disabled}
-        className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
-        Create my application
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        {onCheckScore && (
+          <button
+            type="button"
+            onClick={handleCheckScore}
+            disabled={disabled || checking}
+            className="rounded border border-black px-4 py-2 text-sm font-medium disabled:opacity-50"
+          >
+            {checking ? "Checking…" : "Check my match score"}
+          </button>
+        )}
+        <button
+          type="submit"
+          disabled={disabled}
+          className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Create my application
+        </button>
+      </div>
+      {onCheckScore && (
+        <p className="text-xs text-gray-500">
+          Checking the score is free and does not use your monthly applications.
+        </p>
+      )}
     </form>
   );
 }

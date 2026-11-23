@@ -43,6 +43,14 @@ class ApplicationResponse(BaseModel):
     report: MatchReportOut
 
 
+class MatchPreviewOut(BaseModel):
+    """The match score of a CV for an offer, before creating anything."""
+
+    job_title: str
+    company: str
+    report: MatchReportOut
+
+
 class JobErrorOut(BaseModel):
     status: int
     detail: str

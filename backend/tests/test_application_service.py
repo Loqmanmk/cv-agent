@@ -19,6 +19,7 @@ from app.services.application_service import (
     ApplicationRequest,
     ApplicationService,
     InvalidApplicationInputError,
+    ScoreRequest,
 )
 from app.services.letter_conventions import UnsupportedLetterLanguageError
 from tests.fakes import SequenceLLMProvider
@@ -368,3 +369,57 @@ def test_a_translation_that_breaks_the_guard_stops_the_pipeline() -> None:
         service.create(make_request())
 
     assert len(provider.calls) == 5
+
+
+def score_request(structured_cv: CV | None = None, content: bytes | None = None) -> ScoreRequest:
+    return ScoreRequest(
+        cv_filename="cv.docx",
+        cv_content=make_docx() if content is None else content,
+        job_text="Acme seeks an intern.",
+        structured_cv=structured_cv,
+    )
+
+
+def test_the_score_reads_only_the_offer_and_the_cv() -> None:
+    offer, cv, _, _ = ai_answers()
+    service, provider, converter = make_service([offer, cv])
+
+    preview = service.preview(score_request())
+
+    assert len(provider.calls) == 2
+    assert converter.pages == []
+    assert preview.offer == offer
+    assert preview.report.changes == []
+    assert preview.report.score.value is None or 0 <= preview.report.score.value <= 100
+
+
+def test_a_saved_cv_already_read_is_scored_with_one_ai_call() -> None:
+    cv = make_cv()
+    service, provider, _ = make_service([make_offer()])
+
+    preview = service.preview(score_request(structured_cv=cv))
+
+    assert len(provider.calls) == 1
+    assert preview.structured_cv == cv
+
+
+def test_creating_after_the_score_does_not_read_the_offer_and_the_cv_again() -> None:
+    service, provider, _ = make_service(ai_answers())
+    file = make_docx()
+
+    service.preview(score_request(content=file))
+    result = service.create(make_request(content=file))
+
+    assert len(provider.calls) == 4  # offer, CV, then only the tailoring and the letter
+    assert result.cv.profile == "Rewritten profile."
+
+
+def test_the_score_refuses_a_bad_file_before_any_ai_call() -> None:
+    service, provider, _ = make_service([])
+
+    with pytest.raises(InvalidApplicationInputError):
+        service.preview(
+            ScoreRequest(cv_filename="cv.exe", cv_content=b"MZ", job_text="Acme seeks an intern.")
+        )
+
+    assert provider.calls == []

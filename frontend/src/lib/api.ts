@@ -25,6 +25,13 @@ export type ApplicationResult = {
   report: MatchReport;
 };
 
+/** The match score of the CV for an offer, before creating anything. */
+export type MatchPreview = {
+  jobTitle: string;
+  company: string;
+  report: MatchReport;
+};
+
 export type RenderRequestValues = {
   cv: Cv;
   letter: CoverLetter | null;
@@ -278,6 +285,25 @@ export async function post(
   if (response.status === 401) notifyUnauthorized();
   if (!response.ok) throw await toApiError(response);
   return response.json().catch(() => null);
+}
+
+/**
+ * The match score of the CV for the offer, without creating anything. Free: it does not use
+ * the monthly quota. What the server reads is kept a short while, so creating just after is
+ * faster.
+ */
+export async function scoreApplication(
+  values: Pick<ApplicationRequestValues, "cvFile" | "jobText">,
+  signal?: AbortSignal,
+): Promise<MatchPreview> {
+  const body = new FormData();
+  if (values.cvFile !== null) body.append("cv_file", values.cvFile);
+  body.append("job_text", values.jobText);
+  const data = await post("/applications/score", { body }, signal);
+  if (!isObject(data) || typeof data.job_title !== "string" || typeof data.company !== "string") {
+    throw new ApiError("The server sent an unexpected answer.", 200);
+  }
+  return { jobTitle: data.job_title, company: data.company, report: toReport(data.report) };
 }
 
 /** The steps of a generation, in order, as the server reports them. */

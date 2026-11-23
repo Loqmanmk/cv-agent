@@ -14,7 +14,12 @@ from app.api.account_dependencies import (
     get_saved_cv_service,
 )
 from app.api.auth_dependencies import require_user, require_verified_user
-from app.api.dependencies import get_application_service, get_job_runner, get_rate_limiter
+from app.api.dependencies import (
+    get_application_service,
+    get_job_runner,
+    get_rate_limiter,
+    get_score_rate_limiter,
+)
 from app.api.errors import describe_error
 from app.api.rate_limit import RateLimiter
 from app.core.config import Settings, get_settings
@@ -466,3 +471,50 @@ def test_the_documents_are_returned_even_if_the_saved_cv_cannot_be_kept() -> Non
     response = generate(make_client(service, saved_cvs=saved))
 
     assert response.status_code == 200
+
+
+def test_the_score_of_an_offer_is_given_before_creating_anything() -> None:
+    offer, cv, _, _ = ai_answers()
+    service, _, _ = make_service([offer, cv])
+    quotas = FakeQuotas()
+    client = make_client(service, quotas=quotas)
+
+    response = client.post(
+        "/applications/score",
+        files={"cv_file": ("cv.docx", make_docx())},
+        data={"job_text": "Acme seeks an intern."},
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert (body["job_title"], body["company"]) == ("Stagiaire", "Acme")
+    assert set(body["report"]["score"]) >= {"value", "required_matched", "required_total"}
+    assert quotas.reserved == 0  # checking the score is free
+
+
+def test_the_score_uses_the_saved_cv_and_keeps_it_read_for_next_time() -> None:
+    offer, cv, _, _ = ai_answers()
+    service, _, _ = make_service([offer, cv])
+    saved = FakeSavedCvs(SavedCv(filename="saved.docx", content=make_docx()))
+
+    response = make_client(service, saved_cvs=saved).post(
+        "/applications/score", data={"job_text": "x"}
+    )
+
+    assert response.status_code == 200
+    assert saved.remembered == [cv]
+
+
+def test_the_score_has_its_own_limit_per_hour() -> None:
+    client = make_client(StubService(InvalidApplicationInputError("bad")))
+    app = client.app
+    assert isinstance(app, FastAPI)
+    limiter = RateLimiter(1, 3600)
+    app.dependency_overrides[get_score_rate_limiter] = lambda: limiter
+    files = {"cv_file": ("cv.docx", make_docx())}
+
+    first = client.post("/applications/score", files=files, data={"job_text": "x"})
+    second = client.post("/applications/score", files=files, data={"job_text": "x"})
+
+    assert second.status_code == 429
+    assert first.status_code != 429

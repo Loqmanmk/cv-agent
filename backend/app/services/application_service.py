@@ -31,6 +31,7 @@ from app.services.letter_writer import LetterWriter
 from app.services.masking_llm_provider import MaskingLLMProvider
 from app.services.match_report import MatchReport, build_match_report
 from app.services.photo_selector import PhotoSelector
+from app.services.reading_cache import ReadingCache, key_of
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,24 @@ class ApplicationRequest:
 
 
 @dataclass(frozen=True)
+class ScoreRequest:
+    """What is needed to score a CV against an offer, before creating anything."""
+
+    cv_filename: str
+    cv_content: bytes
+    job_text: str
+    structured_cv: CV | None = None
+
+
+@dataclass(frozen=True)
+class MatchPreview:
+    offer: JobOffer
+    # The CV as read from the file: it can be kept with the saved CV for next time.
+    structured_cv: CV
+    report: MatchReport
+
+
+@dataclass(frozen=True)
 class ApplicationResult:
     offer: JobOffer
     # The CV as read from the file, before any translation: it can be reused next time.
@@ -109,12 +128,30 @@ class ApplicationService:
         letter_html: LetterHtmlRenderer,
         parsers: Mapping[str, DocumentParser],
         photo_sanitizer: PhotoSanitizer,
+        offers: ReadingCache[JobOffer] | None = None,
+        structures: ReadingCache[CV] | None = None,
     ) -> None:
         self._public_llm = llm
         self._private_llm = MaskingLLMProvider(llm)
         self._renderer = DocumentRenderer(converter, counter, cv_html, letter_html)
         self._parsers = parsers
         self._photo_sanitizer = photo_sanitizer
+        self._offers = offers if offers is not None else ReadingCache[JobOffer]()
+        self._structures = structures if structures is not None else ReadingCache[CV]()
+
+    def preview(self, request: ScoreRequest) -> MatchPreview:
+        """How well the CV fits the offer, before spending anything on documents.
+
+        Only the offer and the CV are read; what was read is kept a short while, so creating
+        the application just after does not read them again.
+        """
+        extension = check_cv_file(request.cv_filename, request.cv_content, self._parsers)
+        if request.structured_cv is not None:
+            offer, cv = self._analyze(request.job_text), request.structured_cv
+        else:
+            parsed = self._safe_parse(self._parsers[extension], request.cv_content)
+            offer, cv = self._offer_and_structure(request.job_text, request.cv_content, parsed)
+        return MatchPreview(offer=offer, structured_cv=cv, report=build_match_report(cv, cv, offer))
 
     def create(
         self, request: ApplicationRequest, on_stage: Callable[[Stage], None] = _ignore_stage
@@ -181,18 +218,27 @@ class ApplicationService:
     def _read_offer_and_cv(
         self, request: ApplicationRequest, parsed: ParsedDocument
     ) -> tuple[JobOffer, CV]:
-        """The offer and the CV, read at the same time since neither needs the other."""
         if request.structured_cv is not None:
             logger.info("stage: analyzing the job offer (the saved CV is already read)")
             return self._analyze(request.job_text), request.structured_cv
+        return self._offer_and_structure(request.job_text, request.cv_content, parsed)
+
+    def _offer_and_structure(
+        self, job_text: str, cv_content: bytes, parsed: ParsedDocument
+    ) -> tuple[JobOffer, CV]:
+        """The offer and the CV, read at the same time since neither needs the other."""
         logger.info("stage: analyzing the job offer and structuring the CV at the same time")
         with ThreadPoolExecutor(max_workers=1) as pool:
-            offer = pool.submit(self._analyze, request.job_text)
-            cv = CVStructurer(self._private_llm).structure(parsed.text)
+            offer = pool.submit(self._analyze, job_text)
+            cv = self._structures.get_or_make(
+                key_of(cv_content), lambda: CVStructurer(self._private_llm).structure(parsed.text)
+            )
             return offer.result(), cv
 
     def _analyze(self, job_text: str) -> JobOffer:
-        offer = JobAnalyzer(self._public_llm).analyze(job_text)
+        offer = self._offers.get_or_make(
+            key_of(job_text), lambda: JobAnalyzer(self._public_llm).analyze(job_text)
+        )
         conventions_for(offer.language)  # fail early, before spending more AI calls
         return offer
 

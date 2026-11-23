@@ -6,12 +6,15 @@ import { ApplicationForm, type ApplicationFormValues } from "@/components/Applic
 import { ErrorHint } from "@/components/ErrorHint";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
 import { GenerationProgress } from "@/components/GenerationProgress";
+import { ScorePreview } from "@/components/ScorePreview";
 import {
   ApiError,
   createApplication,
   renderDocuments,
+  scoreApplication,
   type ApplicationResult,
   type GenerationStage,
+  type MatchPreview,
 } from "@/lib/api";
 import { base64ToPdfBlob, documentFileName } from "@/lib/pdf";
 import { uploadSavedCv, type SavedCv } from "@/lib/savedCvApi";
@@ -44,6 +47,12 @@ type State =
   | { phase: "loading"; stage: GenerationStage; includeLetter: boolean; translated: boolean }
   | { phase: "error"; error: ApiError }
   | DoneState;
+
+type ScoreState =
+  | { phase: "idle" }
+  | { phase: "checking" }
+  | { phase: "shown"; preview: MatchPreview }
+  | { phase: "error"; error: ApiError };
 
 type SaveState =
   | { phase: "idle" }
@@ -99,11 +108,36 @@ export function ApplicationPanel({
 }: Props = {}) {
   const [state, setState] = useState<State>({ phase: "idle" });
   const [save, setSave] = useState<SaveState>({ phase: "idle" });
+  const [score, setScore] = useState<ScoreState>({ phase: "idle" });
   const controllerRef = useRef<AbortController | null>(null);
+  const scoreControllerRef = useRef<AbortController | null>(null);
   const cvUrl = state.phase === "done" ? state.cvUrl : null;
   const letterUrl = state.phase === "done" ? state.letterUrl : null;
 
-  useEffect(() => () => controllerRef.current?.abort(), []);
+  useEffect(
+    () => () => {
+      controllerRef.current?.abort();
+      scoreControllerRef.current?.abort();
+    },
+    [],
+  );
+
+  async function handleCheckScore(values: ApplicationFormValues) {
+    scoreControllerRef.current?.abort();
+    const controller = new AbortController();
+    scoreControllerRef.current = controller;
+    setScore({ phase: "checking" });
+    try {
+      const preview = await scoreApplication(
+        { cvFile: values.cvFile, jobText: values.jobText },
+        controller.signal,
+      );
+      setScore({ phase: "shown", preview });
+    } catch (error) {
+      if (isAbortError(error)) return;
+      setScore({ phase: "error", error: toApiError(error) });
+    }
+  }
 
   useEffect(() => {
     if (cvUrl === null) return undefined;
@@ -115,6 +149,8 @@ export function ApplicationPanel({
 
   async function handleSubmit(values: ApplicationFormValues) {
     controllerRef.current?.abort();
+    scoreControllerRef.current?.abort();
+    setScore({ phase: "idle" });
     // No time limit: the server works in the background and the page follows it.
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -221,11 +257,26 @@ export function ApplicationPanel({
     <>
       <ApplicationForm
         onSubmit={(values) => void handleSubmit(values)}
+        onCheckScore={(values) => void handleCheckScore(values)}
+        checking={score.phase === "checking"}
         disabled={state.phase === "loading"}
         savedCv={savedCv}
         canSaveCv={onSavedCvChange !== undefined}
         onRemoveSavedCv={onRemoveSavedCv}
       />
+
+      {score.phase === "checking" && (
+        <p role="status" className="mt-6 rounded bg-blue-50 p-3 text-sm text-blue-800">
+          Reading the offer and your CV to compute your match score…
+        </p>
+      )}
+      {score.phase === "shown" && <ScorePreview preview={score.preview} />}
+      {score.phase === "error" && (
+        <div role="alert" className="mt-6 rounded bg-red-50 p-3 text-sm text-red-800">
+          <p>{score.error.message}</p>
+          <ErrorHint error={score.error} />
+        </div>
+      )}
 
       {state.phase === "loading" && (
         <GenerationProgress

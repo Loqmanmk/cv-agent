@@ -56,6 +56,11 @@ def get_render_rate_limiter() -> RateLimiter:
 
 
 @lru_cache
+def get_score_rate_limiter() -> RateLimiter:
+    return RateLimiter(get_settings().score_rate_limit_per_hour, WINDOW_SECONDS)
+
+
+@lru_cache
 def get_fetch_rate_limiter() -> RateLimiter:
     return RateLimiter(get_settings().fetch_rate_limit_per_hour, WINDOW_SECONDS)
 
@@ -81,6 +86,13 @@ def enforce_rate_limit(
 def enforce_render_rate_limit(
     request: Request,
     limiter: Annotated[RateLimiter, Depends(get_render_rate_limiter)],
+) -> None:
+    _enforce(request, limiter)
+
+
+def enforce_score_rate_limit(
+    request: Request,
+    limiter: Annotated[RateLimiter, Depends(get_score_rate_limiter)],
 ) -> None:
     _enforce(request, limiter)
 
