@@ -41,15 +41,31 @@ def test_stops_at_the_first_success() -> None:
     assert down.calls == 0
 
 
-def test_does_not_fall_back_on_a_bad_request() -> None:
-    bad = RaisingProvider(LLMError("bad request"))
+def test_a_malformed_answer_moves_on_to_the_next_provider() -> None:
+    bad = RaisingProvider(LLMError("unexpected structure"))
     spare = FakeLLMProvider(ANSWER)
 
+    assert FallbackLLMProvider([bad, spare]).generate("s", "u", Language) == ANSWER
+    assert len(spare.calls) == 1
+
+
+def test_raises_the_error_itself_when_every_provider_answered_badly() -> None:
+    providers = [RaisingProvider(LLMError("first bad")), RaisingProvider(LLMError("second bad"))]
+
     with pytest.raises(LLMError) as raised:
-        FallbackLLMProvider([bad, spare]).generate("s", "u", Language)
+        FallbackLLMProvider(providers).generate("s", "u", Language)
 
     assert not isinstance(raised.value, LLMUnavailableError)
-    assert spare.calls == []
+
+
+def test_a_mix_of_busy_and_bad_providers_counts_as_busy() -> None:
+    providers = [
+        RaisingProvider(LLMUnavailableError("busy")),
+        RaisingProvider(LLMError("bad")),
+    ]
+
+    with pytest.raises(LLMUnavailableError, match="busy.*bad"):
+        FallbackLLMProvider(providers).generate("s", "u", Language)
 
 
 def test_raises_with_every_reason_when_all_are_unavailable() -> None:

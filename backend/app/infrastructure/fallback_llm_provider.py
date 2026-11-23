@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 
 from pydantic import BaseModel
 
-from app.domain.llm import LLMProvider, LLMUnavailableError
+from app.domain.llm import LLMError, LLMProvider, LLMUnavailableError
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,8 @@ class FallbackLLMProvider(LLMProvider):
 
     The provider that answered last is tried first, so once a busy model was left, the
     next calls go straight to the one that works instead of failing on the busy one again.
+    Any failure of one provider (busy, out of quota, too slow, a malformed answer) moves on
+    to the next one: the generation fails only when none of them can answer.
     """
 
     def __init__(
@@ -40,6 +42,8 @@ class FallbackLLMProvider(LLMProvider):
     ) -> T:
         failures: list[str] = []
         skipped = 0
+        unavailable = 0
+        broken: LLMError | None = None
         for index in self._order():
             if self._cooldown_until.get(index, 0.0) > self._clock():
                 skipped += 1
@@ -51,9 +55,18 @@ class FallbackLLMProvider(LLMProvider):
                 self._cooldown_until[index] = self._clock() + delay
                 logger.warning("provider unavailable, trying the next one: %s", exc)
                 failures.append(str(exc))
+                unavailable += 1
+                continue
+            except LLMError as exc:
+                # A malformed answer or a refused request: another model may well succeed.
+                logger.warning("provider failed, trying the next one: %s", exc)
+                failures.append(str(exc))
+                broken = exc
                 continue
             self._last_good = index
             return answer
+        if broken is not None and not unavailable and not skipped:
+            raise broken  # every model answered and none gave usable data: not a busy moment
         raise self._all_unavailable(failures, skipped)
 
     def _order(self) -> list[int]:

@@ -6,7 +6,7 @@ from typing import Any, NoReturn
 import httpx
 import pytest
 from google import genai
-from google.genai import errors
+from google.genai import errors, types
 from pydantic import SecretStr
 
 from app.domain.cv import Language
@@ -163,3 +163,44 @@ def test_network_error_is_marked_unavailable(monkeypatch: pytest.MonkeyPatch) ->
 
     with pytest.raises(LLMUnavailableError):
         provider.generate("system", "user", Language)
+
+
+def too_slow(**_kwargs: Any) -> NoReturn:
+    raise httpx.ReadTimeout("timed out")
+
+
+def test_a_model_that_does_not_answer_in_time_is_left_for_the_next_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = make_provider(monkeypatch, too_slow)
+
+    with pytest.raises(LLMUnavailableError, match="no answer within 75 s"):
+        provider.generate("system", "user", Language)
+
+
+def test_the_client_gives_up_a_call_after_the_time_limit() -> None:
+    provider = GeminiProvider(SecretStr(API_KEY), "gemini-3-flash-preview", timeout_seconds=12.5)
+
+    options = provider._client._api_client._http_options
+
+    assert options.timeout == 12_500
+
+
+def thinking_of(monkeypatch: pytest.MonkeyPatch, model: str) -> Any:
+    calls: list[dict[str, Any]] = []
+    client = genai.Client(api_key=API_KEY)
+    monkeypatch.setattr(client.models, "generate_content", answering(VALID_ANSWER, calls))
+    GeminiProvider(SecretStr(API_KEY), model, client).generate("s", "u", Language)
+    return calls[0]["config"].thinking_config
+
+
+def test_gemini_3_models_think_at_the_low_level_to_answer_faster(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    thinking = thinking_of(monkeypatch, "gemini-3.7-flash")
+
+    assert thinking.thinking_level == types.ThinkingLevel.LOW
+
+
+def test_older_models_keep_their_own_thinking(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert thinking_of(monkeypatch, "gemini-2.5-flash") is None

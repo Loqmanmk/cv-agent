@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 API_URL = "https://api.groq.com/openai/v1/chat/completions"
 TEMPERATURE = 0.2
-TIMEOUT_SECONDS = 120.0
+TIMEOUT_SECONDS = 60.0  # a call with no answer by then is given up for the next model
 MAX_DETAIL_CHARS = 300
 # How long to skip a model after a problem that is not a quota (seconds).
 BAD_ANSWER_PAUSE = 1.0  # one bad answer: the next model tries at once, this one stays usable

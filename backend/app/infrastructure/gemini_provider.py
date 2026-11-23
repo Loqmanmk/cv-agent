@@ -22,6 +22,12 @@ BASE_DELAY_SECONDS = 2.0
 RETRYABLE_CODES = {500, 502, 503, 504}
 UNAVAILABLE_CODES = RETRYABLE_CODES | {429}
 MAX_DETAIL_CHARS = 600
+# A model that is overloaded can keep a call open for minutes without answering. After this
+# long the call is given up, so the next model answers instead of the whole generation waiting.
+CALL_TIMEOUT_SECONDS = 75.0
+# Gemini 3 models think at full depth by default, which is slow. Rewriting a CV needs little
+# reasoning: the low level answers several times faster with the same quality.
+LOW_THINKING_PREFIX = "gemini-3"
 RETRY_HINT = re.compile(r"retry in (?:(\d+)h)?(?:(\d+)m)?(?:([\d.]+)s)?", re.IGNORECASE)
 
 
@@ -56,9 +62,14 @@ class GeminiProvider(LLMProvider):
         model: str,
         client: genai.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        timeout_seconds: float = CALL_TIMEOUT_SECONDS,
     ) -> None:
         self._model = model
-        self._client = client or genai.Client(api_key=api_key.get_secret_value())
+        self._timeout_seconds = timeout_seconds
+        self._client = client or genai.Client(
+            api_key=api_key.get_secret_value(),
+            http_options=types.HttpOptions(timeout=round(timeout_seconds * 1000)),
+        )
         self._sleep = sleep
 
     def generate[T: BaseModel](
@@ -72,12 +83,18 @@ class GeminiProvider(LLMProvider):
             response_mime_type="application/json",
             response_json_schema=_strip_additional_properties(response_model.model_json_schema()),
             temperature=TEMPERATURE,
+            thinking_config=self._thinking(),
         )
         text = self._request(user_prompt, config)
         try:
             return response_model.model_validate_json(text)
         except ValidationError as exc:
             raise LLMError("Gemini returned data with an unexpected structure.") from exc
+
+    def _thinking(self) -> types.ThinkingConfig | None:
+        if not self._model.startswith(LOW_THINKING_PREFIX):
+            return None
+        return types.ThinkingConfig(thinking_level=types.ThinkingLevel.LOW)
 
     def _request(self, prompt: str, config: types.GenerateContentConfig) -> str:
         for attempt in range(1, MAX_ATTEMPTS + 1):
@@ -91,6 +108,10 @@ class GeminiProvider(LLMProvider):
                     self._sleep(BASE_DELAY_SECONDS * 2 ** (attempt - 1))
                     continue
                 raise self._to_llm_error(exc) from exc
+            except httpx.TimeoutException as exc:
+                seconds = round(self._timeout_seconds)
+                message = f"Gemini {self._model}: no answer within {seconds} s."
+                raise LLMUnavailableError(message) from exc
             except httpx.TransportError as exc:
                 raise LLMUnavailableError(f"Gemini {self._model}: network error.") from exc
             if not response.text:
