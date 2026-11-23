@@ -116,6 +116,15 @@ describe("Match with the offer", () => {
     await user.click(screen.getByLabelText(/Django/));
 
     // 2 + 2 of the 2 * 3 + 1 points.
-    expect(screen.getByText("With the skills you ticked: 57/100.")).toBeInTheDocument();
+    const meter = screen.getByRole("meter", { name: "Match score" });
+    expect(meter).toHaveAttribute("aria-valuenow", "57");
+    expect(screen.getByText(/Good match/)).toBeInTheDocument();
+    expect(screen.getByText(/2 of 3 required skills/)).toBeInTheDocument();
+    expect(screen.getByText(/Before your additions: 29\/100/)).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText(/Django/));
+
+    expect(meter).toHaveAttribute("aria-valuenow", "29");
+    expect(screen.queryByText(/Before your additions/)).not.toBeInTheDocument();
   });
 });

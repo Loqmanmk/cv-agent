@@ -20,22 +20,27 @@ function counted(matched: number, total: number, kind: string): string | null {
   return total === 0 ? null : `${matched} of ${total} ${kind} skills`;
 }
 
-/** The score of the offer for this CV, and what it becomes with the skills the user ticked. */
+/**
+ * The score of the offer for the CV as it is now: the skills the user ticked are in the CV,
+ * so they count. The score of the CV as it was sent stays visible next to it.
+ */
 export function MatchScoreCard({ score, missingSkills, isAdded }: Props) {
   if (score.value === null) return null;
-  const verdict = verdictOf(score.value);
+  const ticked = missingSkills.filter((skill) => isAdded(skill.name));
+  const requiredTicked = ticked.filter((skill) => skill.required).length;
+  const now = scoreWithTicked(score, missingSkills, isAdded) ?? score.value;
+  const verdict = verdictOf(now);
   const tone = TONES[verdict.tone];
-  const withTicked = scoreWithTicked(score, missingSkills, isAdded);
   const details = [
-    counted(score.requiredMatched, score.requiredTotal, "required"),
-    counted(score.niceMatched, score.niceTotal, "nice-to-have"),
+    counted(score.requiredMatched + requiredTicked, score.requiredTotal, "required"),
+    counted(score.niceMatched + ticked.length - requiredTicked, score.niceTotal, "nice-to-have"),
   ].filter((part) => part !== null);
 
   return (
     <div className={`mt-3 rounded border p-3 ${tone.box}`}>
       <div className="flex items-baseline justify-between gap-3">
         <p className="font-semibold">
-          Match score: <span className="text-2xl">{score.value}</span>/100 · {verdict.label}
+          Match score: <span className="text-2xl">{now}</span>/100 · {verdict.label}
         </p>
       </div>
       <div
@@ -43,18 +48,22 @@ export function MatchScoreCard({ score, missingSkills, isAdded }: Props) {
         aria-label="Match score"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={score.value}
+        aria-valuenow={now}
         className="mt-2 h-2 w-full overflow-hidden rounded bg-white/70"
       >
-        <div className={`h-full ${tone.bar}`} style={{ width: `${score.value}%` }} />
+        <div
+          className={`h-full transition-all duration-500 ${tone.bar}`}
+          style={{ width: `${now}%` }}
+        />
       </div>
       <p className="mt-2">{verdict.advice}</p>
       <p className="mt-1 text-xs opacity-80">
         Your CV has {details.join(" and ")}. A required skill counts twice.
       </p>
-      {withTicked !== null && withTicked > score.value && (
+      {now !== score.value && (
         <p role="status" className="mt-1 text-xs font-medium">
-          With the skills you ticked: {withTicked}/100.
+          Before your additions: {score.value}/100. Click &quot;Regenerate PDFs&quot; to put the
+          ticked skills in your PDF.
         </p>
       )}
     </div>
