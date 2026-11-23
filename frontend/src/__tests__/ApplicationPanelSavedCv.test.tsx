@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApplicationPanel } from "@/components/ApplicationPanel";
 import type { SavedCv } from "@/lib/savedCvApi";
 
-import { makeResultBody } from "./fixtures";
+import { makeDoneJob, makeResultBody } from "./fixtures";
 import { jsonResponse } from "./helpers/http";
 
 const fetchMock = vi.fn();
@@ -41,7 +41,7 @@ describe("ApplicationPanel and the saved CV", () => {
   it("saves a new CV first, then creates the application from it", async () => {
     fetchMock
       .mockResolvedValueOnce(jsonResponse(savedBody))
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()));
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())));
     const onSavedCvChange = vi.fn();
     const user = userEvent.setup({ applyAccept: false });
     render(<ApplicationPanel onSavedCvChange={onSavedCvChange} />);
@@ -59,7 +59,7 @@ describe("ApplicationPanel and the saved CV", () => {
   });
 
   it("uses the saved CV without uploading anything", async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())));
     const user = userEvent.setup({ applyAccept: false });
     render(<ApplicationPanel savedCv={SAVED} onSavedCvChange={vi.fn()} />);
 

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationPanel } from "@/components/ApplicationPanel";
 
-import { makeResultBody } from "./fixtures";
+import { makeDoneJob, makeResultBody, makeRunningJob } from "./fixtures";
 
 const fetchMock = vi.fn();
 const revokeMock = vi.fn();
@@ -77,7 +77,7 @@ describe("ApplicationPanel", () => {
   });
 
   it("shows the result with a download link for each PDF", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody())));
     const { user } = setup();
 
     await fillAndSubmit(user);
@@ -93,7 +93,7 @@ describe("ApplicationPanel", () => {
 
   it("asks for no letter and shows only the CV when the letter is unticked", async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse(makeResultBody({ letter: null, letter_pdf_base64: null })),
+      jsonResponse(makeDoneJob(makeResultBody({ letter: null, letter_pdf_base64: null }))),
     );
     const { user } = setup();
 
@@ -110,7 +110,7 @@ describe("ApplicationPanel", () => {
   });
 
   it("shows the review screen with the tailored text", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody())));
     const { user } = setup();
 
     await fillAndSubmit(user);
@@ -119,9 +119,24 @@ describe("ApplicationPanel", () => {
     expect(screen.getByRole("button", { name: "Regenerate PDFs" })).toBeEnabled();
   });
 
+  it("shows where the generation is while the server works", async () => {
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(makeRunningJob("tailoring"), 202))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())));
+    const { user } = setup();
+
+    await fillAndSubmit(user);
+
+    const current = await screen.findByText("Tailoring your CV and writing the letter");
+    expect(current.closest("li")).toHaveAttribute("aria-current", "step");
+    expect(
+      await screen.findByRole("link", { name: "Download CV (PDF)" }, { timeout: 4000 }),
+    ).toBeInTheDocument();
+  });
+
   it("warns when a photo was requested but not found", async () => {
     const body = makeResultBody({ photo_used: false, photo_base64: null });
-    fetchMock.mockResolvedValue(jsonResponse(body));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(body)));
     const { user } = setup();
 
     await fillAndSubmit(user);
@@ -150,7 +165,7 @@ describe("ApplicationPanel", () => {
 
   it("regenerates the PDFs from the edited text", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())))
       .mockResolvedValueOnce(jsonResponse(renderBody));
     const { user } = setup();
     await fillAndSubmit(user);
@@ -180,7 +195,7 @@ describe("ApplicationPanel", () => {
 
   it("releases the old files only when the new ones replace them", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())))
       .mockResolvedValueOnce(jsonResponse(renderBody));
     const { user } = setup();
     await fillAndSubmit(user);
@@ -197,7 +212,7 @@ describe("ApplicationPanel", () => {
 
   it("keeps the previous files and shows the error when regenerating fails", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())))
       .mockResolvedValueOnce(jsonResponse({ detail: "The documents are too long." }, 422));
     const { user } = setup();
     await fillAndSubmit(user);
@@ -214,7 +229,7 @@ describe("ApplicationPanel", () => {
 
   it("locks the review button while regenerating", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())))
       .mockReturnValueOnce(new Promise(() => {}));
     const { user } = setup();
     await fillAndSubmit(user);
@@ -225,7 +240,7 @@ describe("ApplicationPanel", () => {
   });
 
   it("goes back to the form and releases the files on start again", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody())));
     const { user } = setup();
     await fillAndSubmit(user);
 
@@ -238,7 +253,7 @@ describe("ApplicationPanel", () => {
   });
 
   it("releases the files when the page is left", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody())));
     const { user, unmount } = setup();
     await fillAndSubmit(user);
     await screen.findByRole("link", { name: "Download CV (PDF)" });

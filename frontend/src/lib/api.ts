@@ -215,30 +215,37 @@ function retryMessage(response: Response): string {
   return `Too many requests. Please try again in about ${minutes} minute${minutes > 1 ? "s" : ""}.`;
 }
 
-async function toApiError(response: Response): Promise<ApiError> {
-  const body = await readErrorBody(response);
+/** The error the user sees for a status and the body of the server's answer. */
+function errorFor(status: number, body: ErrorBody, tooMany: () => string): ApiError {
   const detail = typeof body.detail === "string" ? body.detail : GENERIC_ERROR;
   const violations = Array.isArray(body.violations)
     ? body.violations.filter((item): item is string => typeof item === "string")
     : [];
 
-  switch (response.status) {
+  switch (status) {
     case 400:
     case 401:
     case 403:
-      return new ApiError(detail, response.status);
+    case 404:
+    case 409:
+      return new ApiError(detail, status);
     case 413:
       return new ApiError("The upload is too large.", 413);
     case 429:
-      return new ApiError(retryMessage(response), 429);
+      return new ApiError(tooMany(), 429);
     case 402:
     case 422:
     case 502:
     case 503:
-      return new ApiError(detail, response.status, violations);
+      return new ApiError(detail, status, violations);
     default:
-      return new ApiError(`${GENERIC_ERROR} (code ${response.status})`, response.status);
+      return new ApiError(`${GENERIC_ERROR} (code ${status})`, status);
   }
+}
+
+async function toApiError(response: Response): Promise<ApiError> {
+  const body = await readErrorBody(response);
+  return errorFor(response.status, body, () => retryMessage(response));
 }
 
 function headersFor(init: RequestInit): Record<string, string> | undefined {
@@ -273,17 +280,42 @@ export async function post(
   return response.json().catch(() => null);
 }
 
-export async function createApplication(
-  values: ApplicationRequestValues,
-  signal?: AbortSignal,
-): Promise<ApplicationResult> {
-  const body = new FormData();
-  if (values.cvFile !== null) body.append("cv_file", values.cvFile);
-  body.append("job_text", values.jobText);
-  body.append("include_photo", String(values.includePhoto));
-  body.append("include_letter", String(values.includeLetter));
+/** The steps of a generation, in order, as the server reports them. */
+export const GENERATION_STAGES = [
+  "queued",
+  "reading",
+  "translating",
+  "tailoring",
+  "rendering",
+  "finished",
+] as const;
+export type GenerationStage = (typeof GENERATION_STAGES)[number];
 
-  const data = await post("/applications", { body }, signal);
+/** How often the page asks the server where the generation is. */
+export const POLL_INTERVAL_MS = 2000;
+/** Past this, the page stops waiting: the server gives up a stuck generation by then too. */
+export const MAX_WAIT_MS = 15 * 60 * 1000;
+/** A few failed checks in a row (a network blip) are retried: the generation goes on. */
+const MAX_FAILED_CHECKS = 5;
+
+type JobBody = {
+  job_id: string;
+  status: "running" | "done" | "failed";
+  stage: GenerationStage;
+  result: unknown;
+  error: unknown;
+};
+
+function isJobBody(body: unknown): body is JobBody {
+  return (
+    isObject(body) &&
+    typeof body.job_id === "string" &&
+    (body.status === "running" || body.status === "done" || body.status === "failed") &&
+    GENERATION_STAGES.includes(body.stage as GenerationStage)
+  );
+}
+
+function toResult(data: unknown): ApplicationResult {
   if (!isResultBody(data)) {
     throw new ApiError("The server sent an unexpected answer.", 200);
   }
@@ -300,6 +332,84 @@ export async function createApplication(
     photoBase64: data.photo_base64,
     report: toReport((data as Record<string, unknown>).report),
   };
+}
+
+function jobFailure(error: unknown): ApiError {
+  const failure = isObject(error) ? error : {};
+  const status = typeof failure.status === "number" ? failure.status : 500;
+  const tooMany = () => "Too many requests. Please try again later.";
+  return errorFor(status, failure, tooMany);
+}
+
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason ?? new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", stop);
+      resolve();
+    }, ms);
+    function stop() {
+      clearTimeout(timer);
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    }
+    signal?.addEventListener("abort", stop, { once: true });
+  });
+}
+
+async function checkJob(jobId: string, signal?: AbortSignal): Promise<JobBody> {
+  const path = `/applications/jobs/${encodeURIComponent(jobId)}`;
+  let failed = 0;
+  for (;;) {
+    try {
+      const data = await post(path, { method: "GET" }, signal);
+      if (!isJobBody(data)) throw new ApiError("The server sent an unexpected answer.", 200);
+      return data;
+    } catch (error) {
+      // Only an unreachable server is retried; a real answer (expired, signed out) is final.
+      const unreachable = error instanceof ApiError && error.status === 0;
+      failed += 1;
+      if (!unreachable || failed >= MAX_FAILED_CHECKS) throw error;
+      await wait(POLL_INTERVAL_MS, signal);
+    }
+  }
+}
+
+/**
+ * Starts the generation, then follows it until it ends. The server works in the background,
+ * so a slow AI never times out the request; onStage is told each step as it starts.
+ */
+export async function createApplication(
+  values: ApplicationRequestValues,
+  signal?: AbortSignal,
+  onStage?: (stage: GenerationStage) => void,
+  now: () => number = Date.now,
+): Promise<ApplicationResult> {
+  const body = new FormData();
+  if (values.cvFile !== null) body.append("cv_file", values.cvFile);
+  body.append("job_text", values.jobText);
+  body.append("include_photo", String(values.includePhoto));
+  body.append("include_letter", String(values.includeLetter));
+
+  const started = await post("/applications", { body }, signal);
+  if (!isJobBody(started)) throw new ApiError("The server sent an unexpected answer.", 200);
+  const deadline = now() + MAX_WAIT_MS;
+  let job = started;
+  for (;;) {
+    onStage?.(job.stage);
+    if (job.status === "done") return toResult(job.result);
+    if (job.status === "failed") throw jobFailure(job.error);
+    if (now() > deadline) {
+      throw new ApiError(
+        "Your application is taking much longer than usual. Please try again later.",
+        0,
+      );
+    }
+    await wait(POLL_INTERVAL_MS, signal);
+    job = await checkJob(started.job_id, signal);
+  }
 }
 
 export async function renderDocuments(

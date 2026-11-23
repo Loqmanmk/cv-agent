@@ -6,6 +6,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.domain.document import InvalidPhotoError
 from app.domain.job_source import JobFetchError
+from app.domain.jobs import JobFailure, JobLimitError
 from app.domain.llm import LLMError, LLMUnavailableError
 from app.domain.tracker import ApplicationNotFoundError, InvalidTrackerInputError
 from app.services.application_service import InvalidApplicationInputError
@@ -31,45 +32,59 @@ INPUT_ERRORS = (
 )
 
 
-def _unprocessable(_request: Request, exc: Exception) -> JSONResponse:
-    return JSONResponse(status_code=422, content={"detail": str(exc)})
+UNFAITHFUL_ERRORS = (TailoringViolationError, LetterViolationError, TranslationViolationError)
+BUSY = "The AI service is busy or out of quota. Please try again later."
+UNEXPECTED = "Something went wrong. Please try again."
 
 
-def _not_found(_request: Request, _exc: Exception) -> JSONResponse:
-    return JSONResponse(status_code=404, content={"detail": "Application not found."})
+def describe_error(exc: Exception) -> JobFailure:
+    """The status and message the user gets for an error, for a direct answer or a job.
+
+    Details of the AI providers and of unexpected errors stay in the logs: they can hold
+    quota information or internals the user does not need.
+    """
+    if isinstance(exc, UNFAITHFUL_ERRORS):
+        violations = [str(item) for item in getattr(exc, "violations", [])]
+        logger.warning("Guard rejected the AI result: %s", violations)
+        detail = "The AI could not produce a faithful result. Please try again."
+        return JobFailure(502, detail, violations)
+    if isinstance(exc, LLMUnavailableError):
+        logger.warning("AI unavailable: %s", exc)
+        return JobFailure(503, BUSY)
+    if isinstance(exc, LLMError):
+        logger.warning("AI error: %s", exc)
+        return JobFailure(502, "The AI service failed to answer.")
+    if isinstance(exc, INPUT_ERRORS):
+        return JobFailure(422, str(exc))
+    if isinstance(exc, JobLimitError):
+        detail = "An application is already being created. Wait for it to finish."
+        return JobFailure(409, detail)
+    if isinstance(exc, ApplicationNotFoundError):
+        return JobFailure(404, "Application not found.")
+    if isinstance(exc, OperationalError):
+        logger.error("Database unavailable: %s", type(exc).__name__)
+        return JobFailure(503, "The database is unavailable. Please try again later.")
+    logger.error("Unexpected error", exc_info=exc)
+    return JobFailure(500, UNEXPECTED)
 
 
-def _unavailable(_request: Request, exc: Exception) -> JSONResponse:
-    logger.warning("AI unavailable: %s", exc)
-    detail = "The AI service is busy or out of quota. Please try again later."
-    return JSONResponse(status_code=503, content={"detail": detail})
-
-
-def _bad_gateway(_request: Request, exc: Exception) -> JSONResponse:
-    logger.warning("AI error: %s", exc)
-    return JSONResponse(status_code=502, content={"detail": "The AI service failed to answer."})
-
-
-def _unfaithful(_request: Request, exc: Exception) -> JSONResponse:
-    violations = list(getattr(exc, "violations", []))
-    logger.warning("Guard rejected the AI result: %s", violations)
-    detail = "The AI could not produce a faithful result. Please try again."
-    return JSONResponse(status_code=502, content={"detail": detail, "violations": violations})
-
-
-def _database_unavailable(_request: Request, exc: Exception) -> JSONResponse:
-    logger.error("Database unavailable: %s", type(exc).__name__)
-    detail = "The database is unavailable. Please try again later."
-    return JSONResponse(status_code=503, content={"detail": detail})
+def _answer(_request: Request, exc: Exception) -> JSONResponse:
+    failure = describe_error(exc)
+    content: dict[str, object] = {"detail": failure.detail}
+    if isinstance(exc, UNFAITHFUL_ERRORS):
+        content["violations"] = failure.violations
+    return JSONResponse(status_code=failure.status, content=content)
 
 
 def register_error_handlers(app: FastAPI) -> None:
-    for error_type in INPUT_ERRORS:
-        app.add_exception_handler(error_type, _unprocessable)
-    app.add_exception_handler(ApplicationNotFoundError, _not_found)
-    app.add_exception_handler(OperationalError, _database_unavailable)
-    app.add_exception_handler(LLMUnavailableError, _unavailable)
-    app.add_exception_handler(LLMError, _bad_gateway)
-    app.add_exception_handler(TailoringViolationError, _unfaithful)
-    app.add_exception_handler(LetterViolationError, _unfaithful)
-    app.add_exception_handler(TranslationViolationError, _unfaithful)
+    handled = (
+        *INPUT_ERRORS,
+        ApplicationNotFoundError,
+        JobLimitError,
+        OperationalError,
+        LLMUnavailableError,
+        LLMError,
+        *UNFAITHFUL_ERRORS,
+    )
+    for error_type in handled:
+        app.add_exception_handler(error_type, _answer)

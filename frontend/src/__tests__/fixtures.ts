@@ -112,3 +112,22 @@ export function makeResultBody(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+/** The answer of the server once a generation is done in the background. */
+export function makeDoneJob(result: unknown = makeResultBody()) {
+  return { job_id: "job-1", status: "done", stage: "finished", result, error: null };
+}
+
+export function makeRunningJob(stage = "reading") {
+  return { job_id: "job-1", status: "running", stage, result: null, error: null };
+}
+
+export function makeFailedJob(status: number, detail: string, violations: string[] = []) {
+  return {
+    job_id: "job-1",
+    status: "failed",
+    stage: "tailoring",
+    result: null,
+    error: { status, detail, violations },
+  };
+}

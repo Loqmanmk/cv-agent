@@ -5,12 +5,18 @@ import { useEffect, useRef, useState } from "react";
 import { ApplicationForm, type ApplicationFormValues } from "@/components/ApplicationForm";
 import { ErrorHint } from "@/components/ErrorHint";
 import { ReviewEditor, type EditedDocuments } from "@/components/ReviewEditor";
-import { ApiError, createApplication, renderDocuments, type ApplicationResult } from "@/lib/api";
+import { GenerationProgress } from "@/components/GenerationProgress";
+import {
+  ApiError,
+  createApplication,
+  renderDocuments,
+  type ApplicationResult,
+  type GenerationStage,
+} from "@/lib/api";
 import { base64ToPdfBlob, documentFileName } from "@/lib/pdf";
 import { uploadSavedCv, type SavedCv } from "@/lib/savedCvApi";
 import { saveApplication } from "@/lib/trackerApi";
 
-const CREATE_TIMEOUT_MS = 500_000;
 const RENDER_TIMEOUT_MS = 120_000;
 const TIMEOUT_MESSAGE = "The request took too long. Please try again.";
 const FALLBACK_TITLE = "Application";
@@ -34,24 +40,16 @@ type DoneState = {
 };
 
 type State =
-  { phase: "idle" } | { phase: "loading" } | { phase: "error"; error: ApiError } | DoneState;
+  | { phase: "idle" }
+  | { phase: "loading"; stage: GenerationStage; includeLetter: boolean; translated: boolean }
+  | { phase: "error"; error: ApiError }
+  | DoneState;
 
 type SaveState =
   | { phase: "idle" }
   | { phase: "saving" }
   | { phase: "saved"; id: number }
   | { phase: "error"; message: string };
-
-function ElapsedSeconds() {
-  const [seconds, setSeconds] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  return <>{seconds}</>;
-}
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
@@ -117,16 +115,24 @@ export function ApplicationPanel({
 
   async function handleSubmit(values: ApplicationFormValues) {
     controllerRef.current?.abort();
-    const request = beginRequest(CREATE_TIMEOUT_MS);
-    controllerRef.current = request.controller;
+    // No time limit: the server works in the background and the page follows it.
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    const includeLetter = values.includeLetter;
+    let translated = false;
+    const showStage = (stage: GenerationStage) => {
+      if (controller.signal.aborted) return;
+      translated ||= stage === "translating";
+      setState({ phase: "loading", stage, includeLetter, translated });
+    };
 
     setSave({ phase: "idle" });
-    setState({ phase: "loading" });
+    showStage("queued");
     try {
       let cvFile = values.cvFile;
       if (cvFile !== null && values.saveCv && onSavedCvChange) {
         // Saved first, so the application then uses the saved CV and the file is sent once.
-        onSavedCvChange(await uploadSavedCv(cvFile, request.controller.signal));
+        onSavedCvChange(await uploadSavedCv(cvFile, controller.signal));
         cvFile = null;
       }
       const result = await createApplication(
@@ -134,9 +140,10 @@ export function ApplicationPanel({
           cvFile,
           jobText: values.jobText,
           includePhoto: values.includePhoto,
-          includeLetter: values.includeLetter,
+          includeLetter,
         },
-        request.controller.signal,
+        controller.signal,
+        showStage,
       );
       setState({
         phase: "done",
@@ -150,15 +157,8 @@ export function ApplicationPanel({
       });
       onCreated?.();
     } catch (error) {
-      if (isAbortError(error)) {
-        if (request.timedOut()) {
-          setState({ phase: "error", error: new ApiError(TIMEOUT_MESSAGE, 0) });
-        }
-        return;
-      }
+      if (isAbortError(error)) return;
       setState({ phase: "error", error: toApiError(error) });
-    } finally {
-      request.finish();
     }
   }
 
@@ -228,9 +228,11 @@ export function ApplicationPanel({
       />
 
       {state.phase === "loading" && (
-        <p role="status" className="mt-6 rounded bg-blue-50 p-3 text-sm text-blue-800">
-          Creating your application… this usually takes about a minute. <ElapsedSeconds /> s
-        </p>
+        <GenerationProgress
+          stage={state.stage}
+          includeLetter={state.includeLetter}
+          translated={state.translated}
+        />
       )}
 
       {state.phase === "error" && (

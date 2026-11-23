@@ -1,9 +1,11 @@
 import math
+from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
 
+from app.api.errors import describe_error
 from app.api.rate_limit import RateLimiter
 from app.core.config import get_settings
 from app.infrastructure.application_factory import (
@@ -11,16 +13,26 @@ from app.infrastructure.application_factory import (
     build_job_fetch_service,
     build_render_service,
 )
+from app.infrastructure.memory_job_store import InMemoryJobStore
 from app.services.application_service import ApplicationService
 from app.services.job_fetch_service import JobFetchService
+from app.services.job_runner import JobRunner
 from app.services.render_service import RenderService
 
 WINDOW_SECONDS = 3600
+# Generations running at the same time in this process; the next ones wait in line.
+MAX_PARALLEL_JOBS = 4
 
 
 @lru_cache
 def get_application_service() -> ApplicationService:
     return build_application_service(get_settings())
+
+
+@lru_cache
+def get_job_runner() -> JobRunner:
+    executor = ThreadPoolExecutor(max_workers=MAX_PARALLEL_JOBS, thread_name_prefix="generation")
+    return JobRunner(InMemoryJobStore(), executor, describe_error)
 
 
 @lru_cache

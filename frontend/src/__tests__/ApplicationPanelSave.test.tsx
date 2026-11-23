@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationPanel } from "@/components/ApplicationPanel";
 
-import { makeResultBody } from "./fixtures";
+import { makeDoneJob, makeResultBody } from "./fixtures";
 
 const fetchMock = vi.fn();
 
@@ -55,7 +55,7 @@ afterEach(() => {
 describe("Saving from the review screen", () => {
   it("saves the edited documents to the tracker and confirms", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())))
       .mockResolvedValueOnce(jsonResponse(savedBody, 201));
     const user = userEvent.setup({ applyAccept: false });
     render(<ApplicationPanel />);
@@ -86,7 +86,7 @@ describe("Saving from the review screen", () => {
 
   it("shows the message of the server when saving fails", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())))
       .mockResolvedValueOnce(jsonResponse({ detail: "The job title is required." }, 422));
     const user = userEvent.setup({ applyAccept: false });
     render(<ApplicationPanel />);
@@ -100,7 +100,7 @@ describe("Saving from the review screen", () => {
 
   it("forgets the confirmation when the user starts again", async () => {
     fetchMock
-      .mockResolvedValueOnce(jsonResponse(makeResultBody()))
+      .mockResolvedValueOnce(jsonResponse(makeDoneJob(makeResultBody())))
       .mockResolvedValueOnce(jsonResponse(savedBody, 201));
     const user = userEvent.setup({ applyAccept: false });
     render(<ApplicationPanel />);

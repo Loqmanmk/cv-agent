@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApplicationPanel } from "@/components/ApplicationPanel";
 
-import { makeResultBody } from "./fixtures";
+import { makeDoneJob, makeResultBody } from "./fixtures";
 
 const fetchMock = vi.fn();
 
@@ -42,7 +42,7 @@ afterEach(() => {
 
 describe("ApplicationPanel and the plan", () => {
   it("tells the page that an application was created", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody())));
     const onCreated = vi.fn();
     const user = userEvent.setup({ applyAccept: false });
     render(<ApplicationPanel onCreated={onCreated} />);

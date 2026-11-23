@@ -8,7 +8,7 @@ import {
   type RenderRequestValues,
 } from "@/lib/api";
 
-import { makeCv, makeLetter, makeResultBody } from "./fixtures";
+import { makeCv, makeLetter, makeDoneJob, makeResultBody } from "./fixtures";
 
 const fetchMock = vi.fn();
 
@@ -58,7 +58,7 @@ afterEach(() => {
 
 describe("createApplication", () => {
   it("posts the CV, the job offer and the photo choice as a form", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody())));
 
     await createApplication(values);
 
@@ -73,7 +73,7 @@ describe("createApplication", () => {
 
   it("ignores a trailing slash in the API address", async () => {
     vi.stubEnv("NEXT_PUBLIC_API_URL", "http://api.test/");
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody()));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody())));
 
     await createApplication(values);
 
@@ -82,7 +82,7 @@ describe("createApplication", () => {
 
   it("returns the result with camelCase names and the editable data", async () => {
     const body = makeResultBody();
-    fetchMock.mockResolvedValue(jsonResponse(body));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(body)));
 
     expect(await createApplication(values)).toEqual({
       jobTitle: "Stagiaire DataLab",
@@ -114,7 +114,7 @@ describe("createApplication", () => {
       missing_skills: [{ name: "Go", required: true }, { name: "Rust" }, "Kotlin"],
       changes: "not a list",
     };
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody({ report })));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody({ report }))));
 
     expect((await createApplication(values)).report).toEqual({
       matchedSkills: ["Python"],
@@ -125,7 +125,7 @@ describe("createApplication", () => {
   });
 
   it("shows no report when the server sends none", async () => {
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody({ report: undefined })));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody({ report: undefined }))));
 
     expect((await createApplication(values)).report).toEqual({
       matchedSkills: [],
@@ -142,7 +142,7 @@ describe("createApplication", () => {
       changes: [],
       score: { value: 140, required_matched: -1, required_total: "3", nice_matched: 1.5 },
     };
-    fetchMock.mockResolvedValue(jsonResponse(makeResultBody({ report })));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(makeResultBody({ report }))));
 
     expect((await createApplication(values)).report.score).toEqual({
       value: null,
@@ -155,7 +155,7 @@ describe("createApplication", () => {
 
   it("accepts an answer without a photo", async () => {
     fetchMock.mockResolvedValue(
-      jsonResponse(makeResultBody({ photo_used: false, photo_base64: null })),
+      jsonResponse(makeDoneJob(makeResultBody({ photo_used: false, photo_base64: null }))),
     );
 
     expect((await createApplication(values)).photoBase64).toBeNull();
@@ -233,7 +233,7 @@ describe("createApplication", () => {
   it("refuses an answer without the editable data", async () => {
     const withoutCv: Record<string, unknown> = { ...makeResultBody() };
     delete withoutCv.cv;
-    fetchMock.mockResolvedValue(jsonResponse(withoutCv));
+    fetchMock.mockResolvedValue(jsonResponse(makeDoneJob(withoutCv)));
 
     const error = await failureOf(createApplication(values));
 

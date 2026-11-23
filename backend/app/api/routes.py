@@ -1,9 +1,11 @@
 import base64
+import logging
+import uuid
 from dataclasses import asdict
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
 from app.api.account_dependencies import (
     get_profile_service,
@@ -17,10 +19,13 @@ from app.api.dependencies import (
     enforce_render_rate_limit,
     get_application_service,
     get_job_fetch_service,
+    get_job_runner,
     get_render_service,
 )
 from app.api.schemas import (
     ApplicationResponse,
+    JobErrorOut,
+    JobOut,
     JobTextResponse,
     JobUrlRequest,
     MatchReportOut,
@@ -30,12 +35,21 @@ from app.api.schemas import (
     RenderResponse,
 )
 from app.domain.document import MAX_CV_BYTES, InvalidPhotoError
-from app.services.application_service import ApplicationRequest, ApplicationService
+from app.domain.jobs import GenerationJob, JobLimitError
+from app.domain.saved_cv import SavedCv
+from app.services.application_service import (
+    ApplicationRequest,
+    ApplicationResult,
+    ApplicationService,
+)
 from app.services.job_fetch_service import JobFetchService
+from app.services.job_runner import JobRunner, StageReporter
 from app.services.profile_service import ProfileService
 from app.services.quota_service import QuotaService
 from app.services.render_service import RenderRequest, RenderService
 from app.services.saved_cv_service import SavedCvService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -64,12 +78,14 @@ def health() -> dict[str, str]:
 
 @router.post(
     "/applications",
-    response_model=ApplicationResponse,
+    response_model=JobOut,
+    status_code=202,
     dependencies=[Depends(require_verified_user), Depends(enforce_rate_limit)],
 )
 def create_application(
     job_text: Annotated[str, Form()],
     service: Annotated[ApplicationService, Depends(get_application_service)],
+    runner: Annotated[JobRunner, Depends(get_job_runner)],
     profiles: Annotated[ProfileService, Depends(get_profile_service)],
     quotas: Annotated[QuotaService, Depends(get_quota_service)],
     saved_cvs: Annotated[SavedCvService, Depends(get_saved_cv_service)],
@@ -77,8 +93,13 @@ def create_application(
     include_photo: Annotated[bool, Form()] = True,
     include_letter: Annotated[bool, Form()] = True,
     cv_file: Annotated[UploadFile | None, File()] = None,
-) -> ApplicationResponse:
-    """Uses the uploaded file, or the saved CV of the user when no file is sent."""
+) -> JobOut:
+    """Starts the generation in the background and answers at once with its job.
+
+    The quick checks (profile, saved CV, monthly quota) answer here directly; the AI work
+    then runs in the background and the page follows it with GET /applications/jobs/{id}.
+    Uses the uploaded file, or the saved CV of the user when no file is sent.
+    """
     profile = profiles.require_complete(user_id)
     saved = None
     if cv_file is None:
@@ -100,14 +121,74 @@ def create_application(
         include_letter=include_letter,
     )
     reservation = quotas.reserve_application(user_id)
+
+    def work(report: StageReporter) -> dict[str, object]:
+        try:
+            result = service.create(request, report)
+        except Exception:
+            # A failed application is not counted: users only use their quota for real documents.
+            quotas.release(user_id, reservation)
+            raise
+        _remember_structure(saved_cvs, user_id, saved, result)
+        return _application_response(result).model_dump(mode="json")
+
     try:
-        result = service.create(request)
-    except Exception:
-        # A failed application is not counted: users only use their quota for real documents.
+        job = runner.submit(user_id, work)
+    except JobLimitError:
         quotas.release(user_id, reservation)
         raise
-    if saved is not None and saved.structured is None:
+    return _job_out(job)
+
+
+@router.get(
+    "/applications/jobs/{job_id}",
+    response_model=JobOut,
+    dependencies=[Depends(require_user)],
+)
+def get_application_job(
+    job_id: uuid.UUID,
+    runner: Annotated[JobRunner, Depends(get_job_runner)],
+    user_id: CurrentUserId,
+) -> JobOut:
+    """Where the generation is. Only the user who started it can see it."""
+    job = runner.get(user_id, job_id)
+    if job is None:
+        detail = "This application was not found or has expired. Please create it again."
+        raise HTTPException(status_code=404, detail=detail)
+    return _job_out(job)
+
+
+def _remember_structure(
+    saved_cvs: SavedCvService,
+    user_id: uuid.UUID,
+    saved: SavedCv | None,
+    result: ApplicationResult,
+) -> None:
+    """Keeps the CV as read, so the next application skips that step. Never fails the job."""
+    if saved is None or saved.structured is not None:
+        return
+    try:
         saved_cvs.remember_structure(user_id, saved.content, result.structured_cv)
+    except Exception:  # noqa: BLE001 - the documents are ready; this is only a speed-up
+        logger.warning("Could not keep the structure of the saved CV", exc_info=True)
+
+
+def _job_out(job: GenerationJob) -> JobOut:
+    failure = job.failure
+    return JobOut(
+        job_id=job.id,
+        status=job.status,
+        stage=job.stage,
+        result=ApplicationResponse.model_validate(job.result) if job.result is not None else None,
+        error=JobErrorOut(
+            status=failure.status, detail=failure.detail, violations=failure.violations
+        )
+        if failure is not None
+        else None,
+    )
+
+
+def _application_response(result: ApplicationResult) -> ApplicationResponse:
     return ApplicationResponse(
         job_title=result.offer.title,
         company=result.offer.company,

@@ -1,9 +1,11 @@
 import base64
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.account_dependencies import (
@@ -12,15 +14,18 @@ from app.api.account_dependencies import (
     get_saved_cv_service,
 )
 from app.api.auth_dependencies import require_user, require_verified_user
-from app.api.dependencies import get_application_service, get_rate_limiter
+from app.api.dependencies import get_application_service, get_job_runner, get_rate_limiter
+from app.api.errors import describe_error
 from app.api.rate_limit import RateLimiter
 from app.core.config import Settings, get_settings
 from app.domain.cv import CV
 from app.domain.document import MAX_CV_BYTES
+from app.domain.jobs import Stage
 from app.domain.llm import LLMError, LLMUnavailableError
 from app.domain.plans import QuotaExceededError
 from app.domain.profile import Profile, ProfileIncompleteError
 from app.domain.saved_cv import NoSavedCvError, SavedCv
+from app.infrastructure.memory_job_store import InMemoryJobStore
 from app.main import MAX_REQUEST_BYTES, create_app
 from app.services.application_service import (
     ApplicationRequest,
@@ -29,11 +34,13 @@ from app.services.application_service import (
 )
 from app.services.cv_structurer import CVStructuringError
 from app.services.job_analyzer import JobAnalysisError
+from app.services.job_runner import JobRunner
 from app.services.letter_conventions import UnsupportedLetterLanguageError
 from app.services.letter_guard import LetterViolationError
 from app.services.page_fitter import PageOverflowError
 from app.services.tailoring_guard import TailoringViolationError
 from tests.auth_helpers import FAKE_SESSION
+from tests.fakes import ImmediateExecutor
 from tests.test_application_service import FAKE_PDF, ai_answers, make_docx, make_service
 from tests.test_config import IsolatedSettings
 from tests.test_tailoring_guard import make_cv
@@ -50,7 +57,7 @@ class StubService:
         self._error = error
         self.requests: list[ApplicationRequest] = []
 
-    def create(self, request: ApplicationRequest) -> ApplicationResult:
+    def create(self, request: ApplicationRequest, on_stage: object = None) -> ApplicationResult:
         self.requests.append(request)
         raise self._error
 
@@ -120,7 +127,27 @@ def make_client(
     app.dependency_overrides[get_profile_service] = lambda: profile_service
     app.dependency_overrides[get_quota_service] = lambda: quota_service
     app.dependency_overrides[get_settings] = lambda: settings
+    runner = JobRunner(InMemoryJobStore(), ImmediateExecutor(), describe_error)
+    app.dependency_overrides[get_job_runner] = lambda: runner
     return TestClient(app, raise_server_exceptions=False)
+
+
+def outcome(client: TestClient, started: httpx.Response) -> httpx.Response:
+    """The answer the page ends with: the refusal itself, or the job's result or error."""
+    if started.status_code != 202:
+        return started
+    job = client.get(f"/applications/jobs/{started.json()['job_id']}").json()
+    if job["error"] is not None:
+        error = job["error"]
+        body = {"detail": error["detail"], "violations": error["violations"]}
+        return httpx.Response(error["status"], json=body)
+    return httpx.Response(200, json=job["result"])
+
+
+def generate(client: TestClient, **data: str) -> httpx.Response:
+    """Creates an application from the saved CV and waits for its end."""
+    started: httpx.Response = client.post("/applications", data={"job_text": "x", **data})
+    return outcome(client, started)
 
 
 def upload(
@@ -128,12 +155,12 @@ def upload(
     filename: str = "cv.docx",
     content: bytes | None = None,
 ) -> httpx.Response:
-    response: httpx.Response = client.post(
+    started: httpx.Response = client.post(
         "/applications",
         files={"cv_file": (filename, make_docx() if content is None else content)},
         data={"job_text": "Acme seeks an intern."},
     )
-    return response
+    return outcome(client, started)
 
 
 def test_health_check() -> None:
@@ -217,7 +244,7 @@ def test_without_a_file_or_a_saved_cv_the_user_is_asked_to_upload() -> None:
     stub = StubService(RuntimeError("must not run"))
     quotas = FakeQuotas()
 
-    response = make_client(stub, quotas=quotas).post("/applications", data={"job_text": "x"})
+    response = generate(make_client(stub, quotas=quotas))
 
     assert response.status_code == 422
     assert "no saved CV" in response.json()["detail"]
@@ -229,7 +256,7 @@ def test_without_a_file_the_saved_cv_is_used() -> None:
     stub = StubService(InvalidApplicationInputError("bad"))
     saved = FakeSavedCvs(SavedCv(filename="saved.pdf", content=b"%PDF-saved"))
 
-    make_client(stub, saved_cvs=saved).post("/applications", data={"job_text": "x"})
+    generate(make_client(stub, saved_cvs=saved))
 
     assert (stub.requests[0].cv_filename, stub.requests[0].cv_content) == (
         "saved.pdf",
@@ -241,7 +268,7 @@ def test_the_saved_cv_is_read_once_then_kept_for_next_time() -> None:
     service, _, _ = make_service(ai_answers())
     saved = FakeSavedCvs(SavedCv(filename="saved.docx", content=make_docx()))
 
-    response = make_client(service, saved_cvs=saved).post("/applications", data={"job_text": "x"})
+    response = generate(make_client(service, saved_cvs=saved))
 
     assert response.status_code == 200
     assert len(saved.remembered) == 1
@@ -252,7 +279,7 @@ def test_a_saved_cv_already_read_is_passed_to_the_pipeline() -> None:
     structured = make_cv()
     saved = FakeSavedCvs(SavedCv(filename="saved.pdf", content=b"%PDF", structured=structured))
 
-    make_client(stub, saved_cvs=saved).post("/applications", data={"job_text": "x"})
+    generate(make_client(stub, saved_cvs=saved))
 
     assert stub.requests[0].structured_cv == structured
     assert saved.remembered == []
@@ -353,3 +380,89 @@ def test_cors_refuses_other_origins() -> None:
     )
 
     assert "access-control-allow-origin" not in response.headers
+
+
+class StagedService:
+    """Reports the stages of a real generation, then fails, to look at the job."""
+
+    def __init__(self) -> None:
+        self.stages: list[Stage] = []
+
+    def create(self, request: ApplicationRequest, on_stage: object = None) -> ApplicationResult:
+        assert callable(on_stage)
+        for stage in ("reading", "tailoring"):
+            on_stage(stage)
+            self.stages.append(stage)
+        raise LLMUnavailableError("down")
+
+
+def test_creating_an_application_answers_at_once_with_a_job_to_follow() -> None:
+    service, _, _ = make_service(ai_answers())
+    client = make_client(service)
+
+    started = client.post(
+        "/applications", files={"cv_file": ("cv.docx", make_docx())}, data={"job_text": "x"}
+    )
+    job = client.get(f"/applications/jobs/{started.json()['job_id']}").json()
+
+    assert started.status_code == 202
+    assert set(started.json()) == {"job_id", "status", "stage", "result", "error"}
+    assert (job["status"], job["stage"], job["error"]) == ("done", "finished", None)
+    assert job["result"]["company"] == "Acme"
+
+
+def test_the_pipeline_reports_its_stages_to_the_job() -> None:
+    service = StagedService()
+
+    response = upload(make_client(service))
+
+    assert service.stages == ["reading", "tailoring"]
+    assert response.status_code == 503
+
+
+def test_a_job_of_another_user_or_an_unknown_job_is_not_found() -> None:
+    client = make_client(StubService(LLMUnavailableError("down")))
+    started = client.post(
+        "/applications", files={"cv_file": ("cv.docx", make_docx())}, data={"job_text": "x"}
+    )
+    job_id = started.json()["job_id"]
+    other = make_client(StubService(LLMUnavailableError("down")))
+
+    assert client.get(f"/applications/jobs/{uuid.uuid4()}").status_code == 404
+    assert other.get(f"/applications/jobs/{job_id}").status_code == 404
+
+
+def test_a_second_application_while_one_runs_is_refused_and_not_counted() -> None:
+    quotas = FakeQuotas()
+    client = make_client(object(), quotas=quotas)
+    app = client.app
+    assert isinstance(app, FastAPI)
+
+    class NeverRuns(ImmediateExecutor):
+        def submit(self, fn: Any, /, *args: Any, **kwargs: Any) -> Any:
+            return None
+
+    runner = JobRunner(InMemoryJobStore(), NeverRuns(), describe_error)
+    app.dependency_overrides[get_job_runner] = lambda: runner
+    files = {"cv_file": ("cv.docx", make_docx())}
+
+    first = client.post("/applications", files=files, data={"job_text": "x"})
+    second = client.post("/applications", files=files, data={"job_text": "x"})
+
+    assert first.status_code == 202
+    assert second.status_code == 409
+    assert "already being created" in second.json()["detail"]
+    assert (quotas.reserved, quotas.released) == (2, 1)
+
+
+def test_the_documents_are_returned_even_if_the_saved_cv_cannot_be_kept() -> None:
+    class BrokenSavedCvs(FakeSavedCvs):
+        def remember_structure(self, user_id: uuid.UUID, content: bytes, structured: CV) -> None:
+            raise RuntimeError("database hiccup")
+
+    service, _, _ = make_service(ai_answers())
+    saved = BrokenSavedCvs(SavedCv(filename="saved.docx", content=make_docx()))
+
+    response = generate(make_client(service, saved_cvs=saved))
+
+    assert response.status_code == 200

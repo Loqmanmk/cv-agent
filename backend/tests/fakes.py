@@ -1,4 +1,7 @@
 import threading
+from collections.abc import Callable
+from concurrent.futures import Executor, Future
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -48,3 +51,15 @@ class SequenceLLMProvider(LLMProvider):
                 if isinstance(answer, response_model):
                     return self._answers.pop(index)  # type: ignore[return-value]
             raise LLMError(f"No preset answer left for {response_model.__name__}")
+
+
+class ImmediateExecutor(Executor):
+    """Runs each task at once in the calling thread, so a background job is done on return."""
+
+    def submit[R](self, fn: Callable[..., R], /, *args: Any, **kwargs: Any) -> Future[R]:
+        future: Future[R] = Future()
+        try:
+            future.set_result(fn(*args, **kwargs))
+        except Exception as exc:  # noqa: BLE001 - kept in the future, like a real executor
+            future.set_exception(exc)
+        return future

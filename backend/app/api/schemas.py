@@ -1,7 +1,10 @@
+import uuid
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.domain.cv import CV
 from app.domain.job import OfferLanguage
+from app.domain.jobs import JobStatus, Stage
 from app.domain.letter import CoverLetter
 
 
@@ -38,6 +41,22 @@ class ApplicationResponse(BaseModel):
     letter: CoverLetter | None
     photo_base64: str | None
     report: MatchReportOut
+
+
+class JobErrorOut(BaseModel):
+    status: int
+    detail: str
+    violations: list[str]
+
+
+class JobOut(BaseModel):
+    """A generation in the background: ask again until its status is no longer running."""
+
+    job_id: uuid.UUID
+    status: JobStatus
+    stage: Stage
+    result: ApplicationResponse | None = None
+    error: JobErrorOut | None = None
 
 
 class RenderRequestBody(BaseModel):

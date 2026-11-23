@@ -1,5 +1,5 @@
 import logging
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date
@@ -15,6 +15,7 @@ from app.domain.document import (
     PhotoSanitizer,
 )
 from app.domain.job import JobOffer, OfferLanguage
+from app.domain.jobs import Stage
 from app.domain.letter import CoverLetter, Gender, LetterSender
 from app.domain.llm import LLMProvider
 from app.domain.pdf import PdfConverter, PdfPageCounter
@@ -92,6 +93,10 @@ class ApplicationResult:
         return self.photo is not None
 
 
+def _ignore_stage(_stage: Stage) -> None:
+    return None
+
+
 class ApplicationService:
     """Produces a tailored CV and a cover letter, both as one-page PDFs."""
 
@@ -111,7 +116,11 @@ class ApplicationService:
         self._parsers = parsers
         self._photo_sanitizer = photo_sanitizer
 
-    def create(self, request: ApplicationRequest) -> ApplicationResult:
+    def create(
+        self, request: ApplicationRequest, on_stage: Callable[[Stage], None] = _ignore_stage
+    ) -> ApplicationResult:
+        """on_stage is told each step as it starts, so the page can show the progress."""
+        on_stage("reading")
         parsed = self._parse(request)
         offer, structured = self._read_offer_and_cv(request, parsed)
         cv = structured
@@ -120,10 +129,13 @@ class ApplicationService:
         cv_language = detect_language(parsed.text) or request.cv_language
         if cv_language != offer.language:
             logger.info("stage: translating the CV from %s to %s", cv_language, offer.language)
+            on_stage("translating")
             cv = CVTranslator(self._private_llm).translate(cv, offer.language)
+        on_stage("tailoring")
         tailored, letter = self._tailor_and_write(cv, offer, request)
         photo = self._select_photo(parsed.images, request.include_photo)
         logger.info("stage: rendering the PDFs")
+        on_stage("rendering")
         documents = self._renderer.render(tailored, letter, photo, offer.language)
         return ApplicationResult(
             offer=offer,
