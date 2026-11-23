@@ -105,3 +105,28 @@ def test_company_summary_numbers_are_allowed_in_the_letter() -> None:
     body = make_body(motivation="Acme est présent dans 58 pays")
 
     assert LetterGuard().violations(body, make_cv(), offer) == []
+
+
+def test_a_strong_word_or_a_long_paragraph_is_only_a_matter_of_style() -> None:
+    body = make_body(opening="Acme, centre d'expertise " + "mot " * 120)
+
+    serious = LetterGuard().serious_violations(body, make_cv(), make_offer())
+
+    assert serious == []
+    assert len(violations_of(body)) == 2
+
+
+def test_invented_facts_and_placeholders_stay_serious() -> None:
+    body = make_body(opening="[poste] 999", experience="Kubernetes")
+
+    serious = LetterGuard().serious_violations(body, make_cv(), make_offer())
+
+    assert any("placeholder" in problem for problem in serious)
+    assert any("999" in problem for problem in serious)
+    assert any("Kubernetes" in problem for problem in serious)
+
+
+def test_the_ai_is_told_not_to_use_a_strong_word_even_about_the_company() -> None:
+    found = violations_of(make_body(opening="Acme est un centre d'expertise"))
+
+    assert any("not even about the company" in problem for problem in found)

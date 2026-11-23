@@ -103,3 +103,25 @@ def test_prompt_names_the_language_and_asks_for_western_digits() -> None:
     system_prompt, _ = provider.calls[0]
     assert "Modern Standard Arabic" in system_prompt
     assert "Western digits" in system_prompt
+
+
+def strong_word_body() -> LetterBody:
+    return make_body(opening="Acme est un centre d'expertise reconnu")
+
+
+def test_a_letter_with_only_a_style_problem_left_is_kept() -> None:
+    provider = SequenceLLMProvider([strong_word_body()] * MAX_ATTEMPTS)
+
+    result = LetterWriter(provider).write(make_cv(), make_offer(), "m")
+
+    assert result == strong_word_body()
+    assert len(provider.calls) == MAX_ATTEMPTS
+    assert "expertise" in provider.calls[1][1]  # the AI was still asked to fix it
+
+
+def test_the_kept_letter_is_never_one_with_a_serious_problem() -> None:
+    provider = SequenceLLMProvider([strong_word_body(), bad_body(), bad_body()])
+
+    result = LetterWriter(provider).write(make_cv(), make_offer(), "m")
+
+    assert result == strong_word_body()

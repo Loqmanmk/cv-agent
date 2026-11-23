@@ -1,9 +1,13 @@
+import logging
+
 from app.domain.cv import CV
 from app.domain.job import JobOffer
 from app.domain.letter import Gender, LetterBody
 from app.domain.llm import LLMProvider
 from app.services.letter_conventions import conventions_for
 from app.services.letter_guard import LetterGuard, LetterViolationError
+
+logger = logging.getLogger(__name__)
 
 MAX_ATTEMPTS = 3
 
@@ -53,12 +57,20 @@ class LetterWriter:
         conventions = conventions_for(offer.language)
         system_prompt = SYSTEM_PROMPT.format(language=conventions.language_name)
         problems: list[str] = []
+        usable: LetterBody | None = None
         for _ in range(MAX_ATTEMPTS):
             prompt = self._build_prompt(cv, offer, gender, problems)
             body = self._llm.generate(system_prompt, prompt, LetterBody)
             problems = self._guard.violations(body, cv, offer)
             if not problems:
                 return body
+            if not self._guard.serious_violations(body, cv, offer):
+                usable = body
+        if usable is not None:
+            # Only style is left (a strong word, a long paragraph): the user reviews the letter
+            # before sending it, so it is not worth failing the whole application for that.
+            logger.warning("letter kept with style problems: %s", problems)
+            return usable
         raise LetterViolationError(problems)
 
     @staticmethod
